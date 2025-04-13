@@ -94,79 +94,32 @@ fn determineLineType(line: []const u8) !LineType {
     var line_type: ?LineType = null;
 
     if (isInlineFn(line)) line_type = .inline_fn;
-
-    if (isInlineVkFn(line)) {
-        if (line_type) |lt| {
-            std.debug.print("Collision: Line Type already assigned {s}:{s}", .{ @tagName(lt), @tagName(.inline_vk_fn) });
-            return error.LineTypeAssignedTwice;
-        }
-        line_type = .inline_vk_fn;
-    }
-
-    if (isExternFn(line)) {
-        if (line_type) |lt| {
-            std.debug.print("Collision: Line Type already assigned {s}:{s}", .{ @tagName(lt), @tagName(.extern_fn) });
-            return error.LineTypeAssignedTwice;
-        }
-        line_type = .extern_fn;
-    }
-
-    if (isExternVkFn(line)) {
-        if (line_type) |lt| {
-            std.debug.print("Collision: Line Type already assigned {s}:{s}", .{ @tagName(lt), @tagName(.vk_fn) });
-            return error.LineTypeAssignedTwice;
-        }
-        line_type = .extern_vk_fn;
-    }
+    if (isInlineVkFn(line)) line_type = try tagnameCollision(line_type, .inline_vk_fn);
+    if (isExternFn(line)) line_type = try tagnameCollision(line_type, .extern_fn);
+    if (isExternVkFn(line)) line_type = try tagnameCollision(line_type, .extern_vk_fn);
 
     if (isPubConst(line)) {
         const line1 = line[pub_const.len..line.len];
-
-        if (isPFN(line1)) {
-            if (line_type) |lt| {
-                std.debug.print("Collision: Line Type already assigned {s}:{s}", .{ @tagName(lt), @tagName(.pfn) });
-                return error.LineTypeAssignedTwice;
-            }
-            line_type = .pfn;
-        }
-
-        if (isImport(line1)) {
-            if (line_type) |lt| {
-                std.debug.print("Collision: Line Type already assigned {s}:{s}", .{ @tagName(lt), @tagName(.import) });
-                return error.LineTypeAssignedTwice;
-            }
-            line_type = .import;
-        }
-
-        if (isOpaque(line1)) {
-            if (line_type) |lt| {
-                std.debug.print("Collision: Line Type already assigned {s}:{s}", .{ @tagName(lt), @tagName(.@"opaque") });
-                return error.LineTypeAssignedTwice;
-            }
-            line_type = .@"opaque";
-        }
-
-        if (isExternStruct(line1)) {
-            if (line_type) |lt| {
-                std.debug.print("Collision: Line Type already assigned {s}:{s}", .{ @tagName(lt), @tagName(.extern_struct) });
-                return error.LineTypeAssignedTwice;
-            }
-            line_type = .extern_struct;
-        }
-
-        if (isEnum(line1)) {
-            if (line_type) |lt| {
-                std.debug.print("Collision: Line Type already assigned {s}:{s}", .{ @tagName(lt), @tagName(.@"enum") });
-                return error.LineTypeAssignedTwice;
-            }
-            line_type = .@"enum";
-        }
+        if (isPFN(line1)) line_type = try tagnameCollision(line_type, .pfn);
+        if (isImport(line1)) line_type = try tagnameCollision(line_type, .import);
+        if (isOpaque(line1)) line_type = try tagnameCollision(line_type, .@"opaque");
+        if (isExternStruct(line1)) line_type = try tagnameCollision(line_type, .extern_struct);
+        if (isEnum(line1)) line_type = try tagnameCollision(line_type, .@"enum");
     }
 
+    // TODO: remove this once all enum fields are filled out
     return line_type orelse {
-        std.debug.print("Error: {s}\n", .{line});
+        // std.debug.print("Error: {s}\n", .{line});
         return error.LineTypeUnidentifiable;
     };
+}
+
+fn tagnameCollision(line_type: ?LineType, new_linetype: LineType) !LineType {
+    if (line_type) |lt| {
+        std.debug.print("Collision: Line Type already assigned {s}:{s}\n", .{ @tagName(lt), @tagName(new_linetype) });
+        return error.LineTypeAssignedTwice;
+    }
+    return new_linetype;
 }
 
 const pub_const = "pub const ";
