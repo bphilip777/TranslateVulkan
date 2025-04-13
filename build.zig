@@ -21,8 +21,13 @@ pub fn build(b: *std.Build) void {
     exe.root_module.linkSystemLibrary("vulkan-1", .{});
     exe.addIncludePath(b.path("Vulkan/Include"));
 
+    // BitTricks
     const BitTricks = b.dependency("BitTricks", .{});
     exe.root_module.addImport("BitTricks", BitTricks.module("BitTricks"));
+
+    // CodingCase
+    const codingcase = b.dependency("CodingCase", .{});
+    exe.root_module.addImport("CodingCase", codingcase.module(""));
 
     b.installArtifact(exe);
 

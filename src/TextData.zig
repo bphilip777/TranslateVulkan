@@ -61,15 +61,15 @@ pub fn parse(self: *const TextData) !void {
 
         switch (line_type) {
             // .inline_fn => _ = try self.processInlineFn(start),
-            .inline_vk_fn => _ = try self.processInlineVkFn(start),
-            // .extern_fn => try self.processExternFn(start),
-            // .extern_vk_fn => try self.processVkFn(start),
+            // .inline_vk_fn => _ = try self.processInlineVkFn(start),
+            // .extern_fn => _ = try self.processExternFn(start),
+            .extern_vk_fn => _ = try self.processVkFn(start),
             //
-            // .pfn => try self.processPFN(start),
-            // .import => try self.processImport(start),
-            // .@"opaque" => try self.processOpaque(start),
-            // .extern_struct => try self.processExternStruct(start),
-            // .@"enum" => try self.processEnum(start),
+            // .pfn => _ = try self.processPFN(start),
+            // .import => _ = try self.processImport(start),
+            // .@"opaque" => _ = try self.processOpaque(start),
+            // .extern_struct => _ = try self.processExternStruct(start),
+            // .@"enum" => _ = try self.processEnum(start),
             else => continue,
         }
 
@@ -88,6 +88,7 @@ const LineType = enum {
     @"opaque",
     extern_struct,
     @"enum",
+    base,
 };
 
 fn determineLineType(line: []const u8) !LineType {
@@ -105,6 +106,7 @@ fn determineLineType(line: []const u8) !LineType {
         if (isOpaque(line1)) line_type = try tagnameCollision(line_type, .@"opaque");
         if (isExternStruct(line1)) line_type = try tagnameCollision(line_type, .extern_struct);
         if (isEnum(line1)) line_type = try tagnameCollision(line_type, .@"enum");
+        if (line_type == null) line_type = .base;
     }
 
     // TODO: remove this once all enum fields are filled out
@@ -121,11 +123,11 @@ fn tagnameCollision(line_type: ?LineType, new_linetype: LineType) !LineType {
 
 const pub_const = "pub const ";
 fn isPubConst(line: []const u8) bool {
-    return std.mem.startsWith(u8, line, pub_const) and !isInlineVkFn(line);
+    return std.mem.startsWith(u8, line, pub_const);
 }
 
 fn isInlineFn(line: []const u8) bool {
-    return std.mem.startsWith(u8, line, "pub inline fn");
+    return std.mem.startsWith(u8, line, "pub inline fn") and !isInlineVkFn(line);
 }
 
 fn isInlineVkFn(line: []const u8) bool {
@@ -202,7 +204,29 @@ fn processPFN(self: *const TextData, start: u32) !u32 {
 
 fn processVkFn(self: *const TextData, start: u32) !u32 {
     const end = indexOf(self.data[start..], 1, ";").?;
-    try self.write(self.data[start .. start +% end +% 1]);
+
+    const data = self.data[start .. start +% end +% 1];
+
+    var rdata: []u8 = try self.allo.dupe(u8, data);
+    defer self.allo.free(rdata);
+
+    for ([_][]const u8{ "vk", "Vk" }) |str| {
+        const temp = try std.mem.replaceOwned(u8, self.allo, rdata, str, "");
+        self.allo.free(rdata);
+        rdata = temp;
+    }
+
+    // lowercase first letter of fn
+    {
+        const prefix = "pub extern fn ";
+        rdata[prefix.len] = std.ascii.toLower(rdata[prefix.len]);
+    }
+
+    // change case
+    {}
+
+    try self.write(rdata);
+
     return end;
 }
 
@@ -231,6 +255,12 @@ fn processEnum(self: *const TextData, start: u32) !u32 {
 }
 
 fn processType(self: *const TextData, start: u32) !u32 {
+    const end = indexOf(self.data[start..], ";").?;
+    try self.write(self.data[start .. start +% end +% 1]);
+    return end;
+}
+
+fn processBase(self: *const TextData, start: u32) !u32 {
     const end = indexOf(self.data[start..], ";").?;
     try self.write(self.data[start .. start +% end +% 1]);
     return end;
