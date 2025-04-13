@@ -108,10 +108,7 @@ fn determineLineType(line: []const u8) !LineType {
     }
 
     // TODO: remove this once all enum fields are filled out
-    return line_type orelse {
-        // std.debug.print("Error: {s}\n", .{line});
-        return error.LineTypeUnidentifiable;
-    };
+    return line_type orelse error.UnidentifiedLineType;
 }
 
 fn tagnameCollision(line_type: ?LineType, new_linetype: LineType) !LineType {
