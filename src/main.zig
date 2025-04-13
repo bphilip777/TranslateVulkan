@@ -8,5 +8,5 @@ pub fn main() !void {
 
     var text = try TextData.init(allo, "src/vulkan.zig", "src/vulkan2.zig");
     defer text.deinit();
-    text.parse();
+    try text.parse();
 }

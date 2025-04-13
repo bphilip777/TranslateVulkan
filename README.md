@@ -3,3 +3,4 @@
 
 zig translate-c -IVulkan/Include -lc -DVK_USE_PLATFORM_WIN32_KHR=1
  Vulkan/Include/vulkan/vulkan.h > src/vulkan.zig
+

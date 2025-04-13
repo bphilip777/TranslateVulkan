@@ -16,9 +16,13 @@ pub fn build(b: *std.Build) void {
     });
     exe.linkLibC();
 
+    // vulkan
     exe.root_module.addLibraryPath(b.path("Vulkan/Lib"));
     exe.root_module.linkSystemLibrary("vulkan-1", .{});
     exe.addIncludePath(b.path("Vulkan/Include"));
+
+    const BitTricks = b.dependency("BitTricks", .{});
+    exe.root_module.addImport("BitTricks", BitTricks.module("BitTricks"));
 
     b.installArtifact(exe);
 
