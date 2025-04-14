@@ -45,6 +45,7 @@ pub fn parse(self: *const TextData) !void {
 
     var i: u32 = 0;
     while (true) {
+        if (data.len -% i < strs[0].len) break;
         const pub_idx = indexOf(data[i..], @truncate(strs[0].len), strs[0].ptr) orelse break;
         const start: u32 = i +% pub_idx;
         i = start +% @as(u32, @truncate(strs[0].len));
@@ -270,15 +271,12 @@ fn processOpaque(self: *const TextData, start: u32) !u32 {
     defer self.allo.free(rdata);
 
     const eql_pos = std.mem.indexOfScalar(u8, rdata, '=').?;
-    const new_terminal_str = "enum(u64) { null = 0, _ };\n";
-    var temp = try self.allo.alloc(u8, eql_pos +% new_terminal_str.len);
-    @memcpy(temp[0..eql_pos], rdata[0..eql_pos]);
-    @memcpy(temp[eql_pos .. eql_pos +% new_terminal_str.len], new_terminal_str);
+    const name = rdata[pub_const.len .. eql_pos - 1];
 
-    self.allo.free(rdata);
-    rdata = temp;
+    const str = try std.fmt.allocPrint(self.allo, "pub const {s} = enum(u64){{null=0, _}};\n", .{name});
+    defer self.allo.free(str);
 
-    try self.write(rdata);
+    try self.write(str);
     return end;
 }
 
