@@ -1,6 +1,6 @@
 const std = @import("std");
 const BitTricks = @import("BitTricks");
-const cc = @import("..\\helpers\\codingCase.zig");
+const cc = @import("CodingCase");
 // assumes valid vulkan.zig or input file is valid zig code
 
 const TextData = @This();
@@ -63,11 +63,11 @@ pub fn parse(self: *const TextData) !void {
             // .inline_fn => _ = try self.processInlineFn(start),
             // .inline_vk_fn => _ = try self.processInlineVkFn(start),
             // .extern_fn => _ = try self.processExternFn(start),
-            .extern_vk_fn => _ = try self.processVkFn(start),
-            //
+            // .extern_vk_fn => _ = try self.processExternVkFn(start),
+
             // .pfn => _ = try self.processPFN(start),
             // .import => _ = try self.processImport(start),
-            // .@"opaque" => _ = try self.processOpaque(start),
+            .@"opaque" => _ = try self.processOpaque(start),
             // .extern_struct => _ = try self.processExternStruct(start),
             // .@"enum" => _ = try self.processEnum(start),
             else => continue,
@@ -167,7 +167,6 @@ fn isType(line: []const u8) bool {
 }
 
 fn processInlineFn(self: *const TextData, start: u32) !u32 {
-    // works
     const end = indexOf(self.data[start..], 1, "}").?;
     try self.write(self.data[start .. start +% end +% 1]);
     return end;
@@ -175,8 +174,8 @@ fn processInlineFn(self: *const TextData, start: u32) !u32 {
 
 fn processInlineVkFn(self: *const TextData, start: u32) !u32 {
     const end = indexOf(self.data[start..], 1, "}").?;
-
     const data = self.data[start .. start +% end +% 1];
+
     const rdata = try std.mem.replaceOwned(u8, self.allo, data, "VK_", "");
     defer self.allo.free(rdata);
     try self.write(rdata);
@@ -192,26 +191,14 @@ fn processExternFn(self: *const TextData, start: u32) !u32 {
 
 fn processExternVkFn(self: *const TextData, start: u32) !u32 {
     const end = indexOf(self.data[start..], 1, ";").?;
-    try self.write(self.data[start .. start +% end +% 1]);
-    return end;
-}
-
-fn processPFN(self: *const TextData, start: u32) !u32 {
-    const end = indexOf(self.data[start..], 1, ";").?;
-    try self.write(self.data[start .. start +% end +% 1]);
-    return end;
-}
-
-fn processVkFn(self: *const TextData, start: u32) !u32 {
-    const end = indexOf(self.data[start..], 1, ";").?;
-
     const data = self.data[start .. start +% end +% 1];
 
-    var rdata: []u8 = try self.allo.dupe(u8, data);
-    defer self.allo.free(rdata);
-
-    for ([_][]const u8{ "vk", "Vk" }) |str| {
-        const temp = try std.mem.replaceOwned(u8, self.allo, rdata, str, "");
+    var rdata = try relaceVkStrs(self.allo, data);
+    for (
+        [_][]const u8{ " vk", "]Vk", " Vk" },
+        [_][]const u8{ " ", "]", " " },
+    ) |ostr, nstr| {
+        const temp = try std.mem.replaceOwned(u8, self.allo, rdata, ostr, nstr);
         self.allo.free(rdata);
         rdata = temp;
     }
@@ -223,10 +210,49 @@ fn processVkFn(self: *const TextData, start: u32) !u32 {
     }
 
     // change case
-    {}
+    var curr_idx = std.mem.indexOfScalar(u8, rdata, '(').?;
+
+    while (true) {
+        const colon_idx = std.mem.indexOfScalar(u8, rdata[curr_idx..], ':') orelse break;
+        curr_idx +%= colon_idx +% 1;
+
+        const prev_space_idx = std.mem.lastIndexOfScalar(u8, rdata[0..curr_idx], ' ') orelse 0;
+        const prev_paren_idx = std.mem.lastIndexOfScalar(u8, rdata[0..curr_idx], '(') orelse 0;
+        const max_idx = @max(prev_space_idx, prev_paren_idx) +% 1;
+        const old_str = rdata[max_idx .. curr_idx -% 1];
+
+        var new_len: u8 = @truncate(old_str.len);
+        for (old_str[0 .. old_str.len - 1], old_str[1..old_str.len]) |ch1, ch2| {
+            if (std.ascii.isLower(ch1) and std.ascii.isUpper(ch2)) new_len +%= 1;
+        }
+        if (new_len == 0) return error.StringTooShort;
+        const new_data: []u8 = try self.allo.alloc(u8, new_len);
+        defer self.allo.free(new_data);
+        const new_str = cc.convert(new_data, old_str, .snake, .camel) catch |err| {
+            std.debug.print("{s}\n", .{old_str});
+            return err;
+        };
+
+        const temp = try std.mem.replaceOwned(u8, self.allo, rdata, old_str, new_str);
+        self.allo.free(rdata);
+        rdata = temp;
+    }
 
     try self.write(rdata);
+    return end;
+}
 
+fn processPFN(self: *const TextData, start: u32) !u32 {
+    const end = indexOf(self.data[start..], 1, ";").?;
+    const data = self.data[start .. start +% end +% 1];
+
+    const rdata = try relaceVkStrs(self.allo, data);
+    defer self.allo.free(rdata);
+
+    // const prefix = "pub const PFN_";
+    // rdata[prefix.len] = std.ascii.toLower(rdata[prefix.len]);
+
+    try self.write(rdata);
     return end;
 }
 
@@ -238,7 +264,21 @@ fn processImport(self: *const TextData, start: u32) !u32 {
 
 fn processOpaque(self: *const TextData, start: u32) !u32 {
     const end = indexOf(self.data[start..], 1, ";").?;
-    try self.write(self.data[start .. start +% end +% 1]);
+    const data = self.data[start .. start +% end +% 1];
+
+    var rdata = try relaceVkStrs(self.allo, data);
+    defer self.allo.free(rdata);
+
+    const eql_pos = std.mem.indexOfScalar(u8, rdata, '=').?;
+    const new_terminal_str = "enum(u64) { null = 0, _ };\n";
+    var temp = try self.allo.alloc(u8, eql_pos +% new_terminal_str.len);
+    @memcpy(temp[0..eql_pos], rdata[0..eql_pos]);
+    @memcpy(temp[eql_pos .. eql_pos +% new_terminal_str.len], new_terminal_str);
+
+    self.allo.free(rdata);
+    rdata = temp;
+
+    try self.write(rdata);
     return end;
 }
 
@@ -314,4 +354,17 @@ fn indexOf(data: []const u8, comptime phrase_len: u32, phrase: [*]const u8) ?u32
 
 inline fn write(self: *const TextData, line: []const u8) !void {
     _ = try self.wfile.write(line);
+}
+
+fn relaceVkStrs(allo: std.mem.Allocator, data: []const u8) ![]u8 {
+    var rdata = try allo.dupe(u8, data);
+    for (
+        [_][]const u8{ " vk", "_vk", "]Vk", " Vk" },
+        [_][]const u8{ " ", "_", "]", " " },
+    ) |ostr, nstr| {
+        const temp = try std.mem.replaceOwned(u8, allo, rdata, ostr, nstr);
+        allo.free(rdata);
+        rdata = temp;
+    }
+    return rdata;
 }

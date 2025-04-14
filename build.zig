@@ -27,7 +27,7 @@ pub fn build(b: *std.Build) void {
 
     // CodingCase
     const codingcase = b.dependency("CodingCase", .{});
-    exe.root_module.addImport("CodingCase", codingcase.module(""));
+    exe.root_module.addImport("CodingCase", codingcase.module("CodingCase"));
 
     b.installArtifact(exe);
 
