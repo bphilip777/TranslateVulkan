@@ -58,8 +58,10 @@ pub fn parse(self: *const TextData) !void {
         i = end;
 
         const line = data[start..end];
+        std.debug.print("{s}\n", .{line});
         // const line_type: LineType = try determineLineType(line);
-        const line_type: LineType = determineLineType(line) catch continue;
+        const line_type: LineType = determineLineType(line) orelse continue;
+        std.debug.print("Line Type: {s}\n", .{@tagName(line_type)});
 
         i +%= switch (line_type) {
             .inline_fn => try self.processInlineFn(start),
@@ -75,10 +77,12 @@ pub fn parse(self: *const TextData) !void {
             .import => try self.processImport(start),
             .@"opaque" => try self.processOpaque(start),
             .extern_struct => try self.processExternStruct(start),
-            .@"enum" => try self.processEnum(start),
+            .enum1 => try self.processEnum1(start),
+            .enum2 => try self.processEnum2(start),
             .base => try self.processBase(start),
+
+            .skip => try self.processSkip(start),
         };
-        std.debug.print("{}\n", .{i});
     }
 }
 
@@ -96,45 +100,36 @@ const LineType = enum {
     import,
     @"opaque",
     extern_struct,
-    @"enum",
+    enum1,
+    enum2,
     base,
+
+    skip,
 };
 
-fn determineLineType(line: []const u8) !LineType {
-    var line_type: ?LineType = null;
-
-    if (isInlineFn(line)) line_type = .inline_fn;
-    if (isInlineVkFn(line)) line_type = try tagnameCollision(line_type, .inline_vk_fn);
-    if (isExternFn(line)) line_type = try tagnameCollision(line_type, .extern_fn);
-    if (isExternVkFn(line)) line_type = try tagnameCollision(line_type, .extern_vk_fn);
-    if (isExternVar(line)) line_type = try tagnameCollision(line_type, .extern_var);
-    if (isFn(line)) line_type = try tagnameCollision(line_type, .@"fn");
-    if (isExternConst(line)) line_type = try tagnameCollision(line_type, .extern_const);
-    if (isExportVar(line)) line_type = try tagnameCollision(line_type, .export_var);
+fn determineLineType(line: []const u8) ?LineType {
+    if (isInlineFn(line)) return .inline_fn;
+    if (isInlineVkFn(line)) return .inline_vk_fn;
+    if (isExternFn(line)) return .extern_fn;
+    if (isExternVkFn(line)) return .extern_vk_fn;
+    if (isExternVar(line)) return .extern_var;
+    if (isFn(line)) return .@"fn";
+    if (isExternConst(line)) return .extern_const;
+    if (isExportVar(line)) return .export_var;
 
     if (isPubConst(line)) {
         const line1 = line[pub_const.len..line.len];
-        if (isPFN(line1)) line_type = try tagnameCollision(line_type, .pfn);
-        if (isImport(line1)) line_type = try tagnameCollision(line_type, .import);
-        if (isOpaque(line1)) line_type = try tagnameCollision(line_type, .@"opaque");
-        if (isExternStruct(line1)) line_type = try tagnameCollision(line_type, .extern_struct);
-        if (isEnum(line1)) line_type = try tagnameCollision(line_type, .@"enum");
-        if (line_type == null) line_type = .base;
+        if (isPFN(line1)) return .pfn;
+        if (isImport(line1)) return .import;
+        if (isOpaque(line1)) return .@"opaque";
+        if (isExternStruct(line1)) return .extern_struct;
+        if (isSkip(line1)) return .skip;
+        if (isEnum1(line1)) return .enum1;
+        if (isEnum2(line1)) return .enum2;
+        return .base;
     }
 
-    // TODO: remove this once all enum fields are filled out
-    return line_type orelse {
-        std.debug.print("Error: {s}\n", .{line});
-        return error.UnidentifiedLineType;
-    };
-}
-
-fn tagnameCollision(line_type: ?LineType, new_linetype: LineType) !LineType {
-    if (line_type) |lt| {
-        std.debug.print("Collision: Line Type already assigned {s}:{s}\n", .{ @tagName(lt), @tagName(new_linetype) });
-        return error.LineTypeAssignedTwice;
-    }
-    return new_linetype;
+    return null;
 }
 
 const pub_const = "pub const ";
@@ -175,6 +170,11 @@ fn isExportVar(line: []const u8) bool {
     return std.mem.startsWith(u8, line, "pub export var");
 }
 
+fn isSkip(line: []const u8) bool {
+    const eql_sign = std.mem.indexOfScalar(u8, line, ':') orelse return false;
+    return cc.isCase(line[0..eql_sign], .screaming_snake) and std.mem.startsWith(u8, line, "VK_");
+}
+
 fn isPFN(line: []const u8) bool {
     return std.mem.startsWith(u8, line, "PFN_vk");
 }
@@ -191,8 +191,14 @@ fn isExternStruct(line: []const u8) bool {
     return std.mem.endsWith(u8, line, "extern struct {");
 }
 
-fn isEnum(line: []const u8) bool {
-    return std.mem.indexOf(u8, line, "enum_Vk") != null;
+fn isEnum1(line: []const u8) bool {
+    return std.mem.startsWith(u8, line, "enum_Vk");
+}
+
+fn isEnum2(line: []const u8) bool {
+    const eql_idx = (std.mem.indexOfScalar(u8, line, '=') orelse return false) - 1;
+    const name = line[0..eql_idx];
+    return std.mem.endsWith(u8, name, "2") and std.mem.endsWith(u8, line, "VkFlags64;");
 }
 
 fn isType(line: []const u8) bool {
@@ -357,10 +363,28 @@ fn processExternStruct(self: *const TextData, start: u32) !u32 {
     return end;
 }
 
-fn processEnum(self: *const TextData, start: u32) !u32 {
+fn processEnum1(self: *const TextData, start: u32) !u32 {
     const end = indexOf(self.data[start..], 1, ";").?;
     const data = self.data[start .. start +% end +% 1];
+    std.debug.print("{s}\n", .{data});
+
+    var curr: u32 = start;
+    while (true) {
+        const prev_start: u32 = @truncate(std.mem.lastIndexOf(u8, data[0..curr], "pub const") orelse break);
+        const prev_end: u32 = @truncate(std.mem.lastIndexOfScalar(u8, data[0..curr], ';') orelse break);
+        if (prev_start >= prev_end) break;
+        std.debug.print("{s}\n", .{self.data[prev_start..prev_end]});
+        curr = prev_start;
+    }
+
     try self.write(data);
+    return end;
+}
+
+fn processEnum2(self: *const TextData, start: u32) !u32 {
+    const end = indexOf(self.data[start..], 1, ";").?;
+    const data = self.data[start .. start +% end +% 1];
+    std.debug.print("{s}\n", .{data});
     return end;
 }
 
@@ -375,6 +399,11 @@ fn processBase(self: *const TextData, start: u32) !u32 {
     const end = indexOf(self.data[start..], 1, ";").?;
     const data = self.data[start .. start +% end +% 1];
     try self.write(data);
+    return end;
+}
+
+fn processSkip(self: *const TextData, start: u32) !u32 {
+    const end = indexOf(self.data[start..], 1, ";").?;
     return end;
 }
 
