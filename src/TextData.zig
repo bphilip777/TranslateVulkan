@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const BitTricks = @import("BitTricks");
 const cc = @import("CodingCase");
 // assumes valid vulkan.zig or input file is valid zig code
@@ -39,18 +40,21 @@ pub fn deinit(self: *TextData) void {
 
 pub fn parse(self: *const TextData) !void {
     const data = self.data;
-    const len: u32 = @truncate(data.len);
-    var start: u32 = 0;
-    var end: u32 = 0;
-    while (start < len) {
-        end = start +% @as(u32, @truncate(self.getEndOfCurrLine(start)));
+    var start: usize = 0;
+    var end: usize = 0;
+    while (start < data.len) {
+        end = start +% self.getEndOfCurrLine(start);
         const line = data[start..end];
         // std.debug.print("Line: {s}\n", .{line});
-        const linetype = determineLineType(line).?;
+        const linetype = determineLineType(line) orelse {
+            start = end +% 1;
+            continue;
+        };
         // std.debug.print("LineType: {s}\n", .{@tagName(linetype)});
         switch (linetype) {
             .inline_vk_fn => start = (try self.processInlineVkFn(start)) +% 1,
-            .inline_fn => start = (try self.processInlineFn(start)) +% 1,
+            // .inline_fn => start = (try self.processInlineFn(start)) +% 1,
+            // .extern_vk_fn => start = (try self.processExternVkFn(start)) +% 1,
             // .enum1 => processEnum1(),
             .skip => start = end +% 1,
             else => {},
@@ -173,12 +177,48 @@ fn isType(line: []const u8) bool {
     return std.mem.startsWith(u8, line, "Vk");
 }
 
-fn processInlineFn(self: *const TextData, idx: u32) !u32 {
-    const len: u32 = @truncate(self.data.len);
-    var start: u32 = idx;
-    var end: u32 = undefined;
+fn processInlineVkFn(self: *const TextData, idx: usize) !usize {
+    const data = self.data;
+    var start: usize = idx;
+    var end: usize = start +% self.getEndOfCurrLine(start);
+
+    {
+        const line = if (builtin.os.tag == .windows) std.mem.trimRight(u8, data[start..end], "\r\n") else data[start..end];
+        start = end +% 1;
+
+        // get title
+        const title_end = std.mem.indexOfScalar(u8, line, '(').?;
+        const title_start = std.mem.lastIndexOfScalar(u8, line[0..title_end], ' ').?;
+        const old_title = line[title_start +% 1 .. title_end];
+        const title = old_title[3..];
+
+        // change title
+        const new_title = try cc.convert(self.allo, title, .camel);
+        defer self.allo.free(new_title);
+
+        // write new title line
+        const new_line = try std.mem.replaceOwned(u8, self.allo, line, old_title, new_title);
+        defer self.allo.free(new_line);
+        try self.write(new_line);
+    }
+
+    while (true) {
+        end = start +% self.getEndOfCurrLine(start);
+        const line = if (@import("builtin").os.tag == .windows) std.mem.trimRight(u8, data[start..end], "\r\n") else data[start..end];
+        start = end +% 1;
+        try self.write(line);
+        if (std.mem.eql(u8, line, "}")) break;
+    }
+
+    return end;
+}
+
+fn processInlineFn(self: *const TextData, idx: usize) !usize {
+    const len: usize = self.data.len;
+    var start: usize = idx;
+    var end: usize = undefined;
     while (start < len) {
-        end = start +% @as(u32, @truncate(self.getEndOfCurrLine(start)));
+        end = start +% self.getEndOfCurrLine(start);
         const line = self.data[start..end];
         try self.write(line);
         if (std.mem.eql(u8, line, "}")) break;
@@ -187,40 +227,13 @@ fn processInlineFn(self: *const TextData, idx: u32) !u32 {
     return end;
 }
 
-fn processInlineVkFn(self: *const TextData, idx: u32) !u32 {
-    const data = self.data;
-    // const len: u32 = @truncate(self.data.len);
-
-    const start: u32 = idx;
-    const end: u32 = start +% @as(u32, @truncate(self.getEndOfCurrLine(start)));
-    const line = data[start..end];
-
-    // get title
-    const title_end = std.mem.indexOfScalar(u8, line, '(').?;
-    const title_start = std.mem.lastIndexOfScalar(u8, line[0..title_end], ' ').?;
-    const title = line[title_start +% 4 .. title_end];
-    std.debug.print("Title: {s}\n", .{title});
-
-    const new_title = try cc.convert(self.allo, title, .camel);
-    defer self.allo.free(new_title);
-    std.debug.print("New Title: {s}\n", .{new_title});
-
-    // while (start < len) {
-    //     try self.write(line);
-    //     if (std.mem.eql(u8, line, "}")) break;
-    //     start = end +% 1;
-    // }
-
+fn processExternFn(self: *const TextData, start: u32) !u32 {
+    const end = self.getEndOfCurrLine(start);
+    const line = self.data[start..end];
+    try self.write(line);
     return end;
 }
 
-// fn processExternFn(self: *const TextData, start: u32) !u32 {
-//     const end = self.getEndOfCurrLine(start);
-//     const line = self.data[start..end];
-//     try self.write(line);
-//     return end;
-// }
-//
 // fn processExternVkFn(self: *const TextData, start: u32) !u32 {
 //     const end = self.getEndOfCurrLine(start);
 //     const line = self.data[start..end];
@@ -434,10 +447,10 @@ fn relaceVkStrs(allo: std.mem.Allocator, data: []const u8) ![]u8 {
     return rdata;
 }
 
-fn getEndOfCurrLine(self: *const TextData, start: u32) usize {
+fn getEndOfCurrLine(self: *const TextData, start: usize) usize {
     return std.mem.indexOfScalar(u8, self.data[start..], '\n') orelse self.data.len;
 }
 
-fn getStartOfPrevLine(self: *const TextData, start: u32) usize {
+fn getStartOfPrevLine(self: *const TextData, start: usize) usize {
     return std.mem.lastIndexOfScalar(u8, self.data[0..start], '\n') orelse 0;
 }

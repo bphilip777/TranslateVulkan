@@ -34,11 +34,16 @@ pub fn main() !void {
     //     try text.parse();
     // }
 
-    const src_filepath = "src/test/src/vulkan_inline_vk_fn.zig";
-    const dst_filepath = "src/test/dst/vulkan_inline_vk_fn.zig";
-    // const src_filepath = "src/test/src/vulkan_inline_fn.zig";
-    // const dst_filepath = "src/test/dst/vulkan_inline_fn.zig";
-    var text = try TextData.init(allo, src_filepath, dst_filepath);
+    const src_dir = "src/test/src/";
+    const dst_dir = "src/test/dst/";
+    const src_filepath = "vulkan_inline_vk_fn.zig";
+    const dst_filepath = "vulkan_inline_vk_fn.zig";
+    // const src_filepath = "vulkan_inline_fn.zig";
+    // const dst_filepath = "vulkan_inline_fn.zig";
+    const src_path = src_dir.* ++ src_filepath.*;
+    const dst_path = dst_dir.* ++ dst_filepath.*;
+    std.debug.print("{s}; {s}\n", .{ src_path, dst_path });
+    var text = try TextData.init(allo, &src_path, &dst_path);
     defer text.deinit();
     try text.parse();
 }
