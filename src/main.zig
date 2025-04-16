@@ -36,13 +36,18 @@ pub fn main() !void {
 
     const src_dir = "src/test/src/";
     const dst_dir = "src/test/dst/";
-    const src_filepath = "vulkan_inline_vk_fn.zig";
-    const dst_filepath = "vulkan_inline_vk_fn.zig";
-    // const src_filepath = "vulkan_inline_fn.zig";
-    // const dst_filepath = "vulkan_inline_fn.zig";
-    const src_path = src_dir.* ++ src_filepath.*;
-    const dst_path = dst_dir.* ++ dst_filepath.*;
-    std.debug.print("{s}; {s}\n", .{ src_path, dst_path });
+
+    // const filepath = "vulkan_inline_vk_fn.zig";
+    // const filepath = "vulkan_inline_fn.zig";
+    // const filepath = "vulkan_extern_vk_fn.zig";
+    // const filepath = "vulkan_extern_fn.zig";
+    // const filepath = "vulkan_extern_var.zig";
+    // const filepath = "vulkan_extern_const.zig";
+    const filepath = "vulkan_export_var.zig";
+
+    const src_path = src_dir.* ++ filepath.*;
+    const dst_path = dst_dir.* ++ filepath.*;
+
     var text = try TextData.init(allo, &src_path, &dst_path);
     defer text.deinit();
     try text.parse();

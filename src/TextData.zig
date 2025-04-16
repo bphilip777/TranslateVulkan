@@ -45,17 +45,19 @@ pub fn parse(self: *const TextData) !void {
     while (start < data.len) {
         end = start +% self.getEndOfCurrLine(start);
         const line = data[start..end];
-        // std.debug.print("Line: {s}\n", .{line});
         const linetype = determineLineType(line) orelse {
             start = end +% 1;
             continue;
         };
-        // std.debug.print("LineType: {s}\n", .{@tagName(linetype)});
         switch (linetype) {
             .inline_vk_fn => start = (try self.processInlineVkFn(start)) +% 1,
-            // .inline_fn => start = (try self.processInlineFn(start)) +% 1,
-            // .extern_vk_fn => start = (try self.processExternVkFn(start)) +% 1,
-            // .enum1 => processEnum1(),
+            .inline_fn => start = (try self.processInlineFn(start)) +% 1,
+            .extern_vk_fn => start = (try self.processExternVkFn(start)) +% 1,
+            .extern_fn => start = (try self.processExternFn(start)) +% 1,
+            .extern_var => start = (try self.processExternVar(start)) +% 1,
+            .extern_const => start = (try self.processExternConst(start)) +% 1,
+            .export_var => start = (try self.processExportVar(start)) +% 1,
+            // .@"fn" => start = (try self.processFn(start)) +% 1,
             .skip => start = end +% 1,
             else => {},
         }
@@ -65,19 +67,24 @@ pub fn parse(self: *const TextData) !void {
 const LineType = enum {
     inline_vk_fn,
     inline_fn,
+
     extern_vk_fn,
     extern_fn,
+
     extern_var,
-    @"fn",
     extern_const,
+
     export_var,
 
     pfn,
     import,
+    @"fn",
     @"opaque",
     extern_struct,
+
     enum1,
     enum2,
+
     base,
 
     skip,
@@ -227,71 +234,70 @@ fn processInlineFn(self: *const TextData, idx: usize) !usize {
     return end;
 }
 
-fn processExternFn(self: *const TextData, start: u32) !u32 {
-    const end = self.getEndOfCurrLine(start);
+fn processExternVkFn(self: *const TextData, start: usize) !usize {
+    const end = start +% self.getEndOfCurrLine(start);
+    const line = self.data[start..end];
+
+    var rline = try replaceVkStrs(self.allo, line);
+    defer self.allo.free(rline);
+    const prefix = "pub extern fn ";
+    rline[prefix.len] = std.ascii.toLower(rline[prefix.len]);
+
+    // change case
+    var curr_idx = std.mem.indexOfScalar(u8, rline, '(').?;
+    while (true) {
+        const colon_idx = std.mem.indexOfScalar(u8, rline[curr_idx..], ':') orelse break;
+        curr_idx +%= colon_idx +% 1;
+
+        const prev_space_idx = std.mem.lastIndexOfScalar(u8, rline[0..curr_idx], ' ') orelse 0;
+        const prev_paren_idx = std.mem.lastIndexOfScalar(u8, rline[0..curr_idx], '(') orelse 0;
+
+        const max_idx = @max(prev_space_idx, prev_paren_idx) +% 1;
+        const old_str = rline[max_idx .. curr_idx -% 1];
+        const new_str = try cc.convert(self.allo, old_str, .snake);
+        defer self.allo.free(new_str);
+
+        const temp = try std.mem.replaceOwned(u8, self.allo, rline, old_str, new_str);
+        self.allo.free(rline);
+        rline = temp;
+    }
+    try self.write(rline);
+
+    return end;
+}
+
+fn processExternFn(self: *const TextData, start: usize) !usize {
+    // TODO: write line as is, but needs to import data at top: const DWORD = std.os.windows.DWORD;
+    const end = start +% self.getEndOfCurrLine(start);
     const line = self.data[start..end];
     try self.write(line);
     return end;
 }
 
-// fn processExternVkFn(self: *const TextData, start: u32) !u32 {
-//     const end = self.getEndOfCurrLine(start);
-//     const line = self.data[start..end];
-//     var rline = try relaceVkStrs(self.allo, line);
-//     for (
-//         [_][]const u8{ " vk", "]Vk", " Vk" },
-//         [_][]const u8{ " ", "]", " " },
-//     ) |ostr, nstr| {
-//         const temp = try std.mem.replaceOwned(u8, self.allo, rline, ostr, nstr);
-//         self.allo.free(rline);
-//         rline = temp;
-//     }
-//
-//     // lowercase first letter of fn
-//     {
-//         const prefix = "pub extern fn ";
-//         rline[prefix.len] = std.ascii.toLower(rline[prefix.len]);
-//     }
-//
-//     // change case
-//     var curr_idx = std.mem.indexOfScalar(u8, rline, '(').?;
-//
-//     while (true) {
-//         const colon_idx = std.mem.indexOfScalar(u8, rline[curr_idx..], ':') orelse break;
-//         curr_idx +%= colon_idx +% 1;
-//
-//         const prev_space_idx = std.mem.lastIndexOfScalar(u8, rline[0..curr_idx], ' ') orelse 0;
-//         const prev_paren_idx = std.mem.lastIndexOfScalar(u8, rline[0..curr_idx], '(') orelse 0;
-//         const max_idx = @max(prev_space_idx, prev_paren_idx) +% 1;
-//         const old_str = rline[max_idx .. curr_idx -% 1];
-//
-//         var new_len: u8 = @truncate(old_str.len);
-//         for (old_str[0 .. old_str.len - 1], old_str[1..old_str.len]) |ch1, ch2| {
-//             if (std.ascii.isLower(ch1) and std.ascii.isUpper(ch2)) new_len +%= 1;
-//         }
-//         if (new_len == 0) return error.StringTooShort;
-//         const new_data: []u8 = try self.allo.alloc(u8, new_len);
-//         defer self.allo.free(new_data);
-//         const new_str = cc.convert(new_data, old_str, .snake, .camel) catch |err| {
-//             std.debug.print("{s}\n", .{old_str});
-//             return err;
-//         };
-//
-//         const temp = try std.mem.replaceOwned(u8, self.allo, rline, old_str, new_str);
-//         self.allo.free(rline);
-//         rline = temp;
-//     }
-//     try self.write(rline);
-//     return end;
-// }
-//
-// fn processExternVar(self: *const TextData, start: u32) !u32 {
-//     const end = self.getEndOfCurrLine(start);
-//     const line = self.data[start..end];
-//     try self.write(line);
-//     return end;
-// }
-//
+fn processExternVar(self: *const TextData, start: usize) !usize {
+    // TODO: write line as is, but needs to import data at top: const DWORD = std.os.windows.DWORD;
+    const end = start +% self.getEndOfCurrLine(start);
+    const line = self.data[start..end];
+    try self.write(line);
+    return end;
+}
+
+fn processExternConst(self: *const TextData, start: usize) !usize {
+    // TODO: write line as is, but needs to import data at top: const DWORD = std.os.windows.DWORD;
+    const end = start +% self.getEndOfCurrLine(start);
+    const line = self.data[start..end];
+    try self.write(line);
+    return end;
+}
+
+fn processExportVar(self: *const TextData, start: usize) !usize {
+    // TODO: write line as is, but need to import data at top;
+    const end = start +% self.getEndOfCurrLine(start);
+    const line = self.data[start..end];
+    try self.write(line);
+    return end;
+}
+
 // fn processFn(self: *const TextData, start: u32) !u32 {
 //     var temp_start = start;
 //
@@ -308,21 +314,7 @@ fn processExternFn(self: *const TextData, start: u32) !u32 {
 //     try self.write(line);
 //     return end;
 // }
-//
-// fn processExternConst(self: *const TextData, start: u32) !u32 {
-//     const end = self.getEndOfCurrLine(start);
-//     const line = self.data[start..end];
-//     try self.write(line);
-//     return end;
-// }
-//
-// fn processExportVar(self: *const TextData, start: u32) !u32 {
-//     const end = self.getEndOfCurrLine(start);
-//     const line = self.data[start..end];
-//     try self.write(line);
-//     return end;
-// }
-//
+
 // fn processPFN(self: *const TextData, start: u32) !u32 {
 //     const end = self.getEndOfCurrLine(start);
 //     const line = self.data[start..end];
@@ -434,13 +426,10 @@ inline fn write(self: *const TextData, line: []const u8) !void {
     _ = try self.wfile.write("\n");
 }
 
-fn relaceVkStrs(allo: std.mem.Allocator, data: []const u8) ![]u8 {
+fn replaceVkStrs(allo: std.mem.Allocator, data: []const u8) ![]u8 {
     var rdata = try allo.dupe(u8, data);
-    for (
-        [_][]const u8{ " vk", "_vk", "]Vk", " Vk" },
-        [_][]const u8{ " ", "_", "]", " " },
-    ) |ostr, nstr| {
-        const temp = try std.mem.replaceOwned(u8, allo, rdata, ostr, nstr);
+    for ([_][]const u8{ " vk", "_vk", "]Vk", " Vk" }) |str| {
+        const temp = try std.mem.replaceOwned(u8, allo, rdata, str, str[0..1]);
         allo.free(rdata);
         rdata = temp;
     }
