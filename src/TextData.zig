@@ -1,5 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
+const nub = if (builtin.os.tag == .windows) 2 else 0;
 const BitTricks = @import("BitTricks");
 const cc = @import("CodingCase");
 // assumes valid vulkan.zig or input file is valid zig code
@@ -52,9 +53,9 @@ pub fn parse(self: *const TextData) !void {
         };
         std.debug.print("LineType: {s}\n", .{@tagName(linetype)});
         switch (linetype) {
-            .inline_vk_fn => start = (try self.processInlineVkFn(start)) +% 1,
+            .inline_fn_vk => start = (try self.processInlineFnVk(start)) +% 1,
             .inline_fn => start = (try self.processInlineFn(start)) +% 1,
-            .extern_vk_fn => start = (try self.processExternVkFn(start)) +% 1,
+            .extern_fn_vk => start = (try self.processExternFnVk(start)) +% 1,
             .extern_fn => start = (try self.processExternFn(start)) +% 1,
             .extern_var => start = (try self.processExternVar(start)) +% 1,
             .extern_const => start = (try self.processExternConst(start)) +% 1,
@@ -63,42 +64,34 @@ pub fn parse(self: *const TextData) !void {
             .pfn => start = (try self.processPFN(start)) +% 1,
             .import => start = (try self.processImport(start)) +% 1,
             .@"opaque" => start = (try self.processOpaque(start)) +% 1,
-            .vk_extern_struct => start = (try self.processVkExternStruct(start)) +% 1,
+            .extern_struct_vk => start = (try self.processExternStructVk(start)) +% 1,
             .extern_struct => start = (try self.processExternStruct(start)) +% 1,
 
             .skip => start = end +% 1,
             else => {},
         }
-        std.debug.print("Start: {}\n", .{start});
+        // std.debug.print("Start: {}\n", .{start});
         break;
     }
 }
 
 const LineType = enum {
-    inline_vk_fn,
+    inline_fn_vk,
     inline_fn,
-
-    extern_vk_fn,
+    extern_fn_vk,
     extern_fn,
-
     extern_var,
     extern_const,
-
     export_var,
-
     @"fn",
     pfn,
     import,
     @"opaque",
-
-    vk_extern_struct,
+    extern_struct_vk,
     extern_struct,
-
     enum1,
     enum2,
-
     base,
-
     skip,
 };
 
@@ -107,9 +100,9 @@ fn determineLineType(line: []const u8) ?LineType {
     if (!std.mem.startsWith(u8, line, strs[0])) return null;
 
     const line1 = line[strs[0].len +% 1 .. line.len];
-    if (isInlineVkFn(line1)) return .inline_vk_fn;
+    if (isInlineFnVk(line1)) return .inline_fn_vk;
     if (isInlineFn(line1)) return .inline_fn;
-    if (isExternVkFn(line1)) return .extern_vk_fn;
+    if (isExternFnVk(line1)) return .extern_fn_vk;
     if (isExternFn(line1)) return .extern_fn;
     if (isExternVar(line1)) return .extern_var;
     if (isFn(line1)) return .@"fn";
@@ -121,6 +114,7 @@ fn determineLineType(line: []const u8) ?LineType {
     if (isPFN(line2)) return .pfn;
     if (isImport(line2)) return .import;
     if (isOpaque(line2)) return .@"opaque";
+    if (isExternStructVk(line2)) return .extern_struct_vk;
     if (isExternStruct(line2)) return .extern_struct;
     if (isSkip(line2)) return .skip;
     if (isEnum1(line2)) return .enum1;
@@ -128,7 +122,7 @@ fn determineLineType(line: []const u8) ?LineType {
     return .base;
 }
 
-fn isInlineVkFn(line: []const u8) bool {
+fn isInlineFnVk(line: []const u8) bool {
     return std.mem.startsWith(u8, line, "inline fn VK_");
 }
 
@@ -136,7 +130,7 @@ fn isInlineFn(line: []const u8) bool {
     return std.mem.startsWith(u8, line, "inline fn");
 }
 
-fn isExternVkFn(line: []const u8) bool {
+fn isExternFnVk(line: []const u8) bool {
     return std.mem.startsWith(u8, line, "extern fn vk");
 }
 
@@ -179,7 +173,7 @@ fn isOpaque(line: []const u8) bool {
     return std.mem.endsWith(u8, newline, "opaque {};");
 }
 
-fn isVkExternStruct(line: []const u8) bool {
+fn isExternStructVk(line: []const u8) bool {
     const newline = if (builtin.os.tag == .windows) std.mem.trimRight(u8, line, "\r\n") else line;
     const startswith = std.mem.startsWith(u8, newline, "struct_Vk");
     const endswith = std.mem.endsWith(u8, newline, "extern struct {");
@@ -208,11 +202,11 @@ fn isType(line: []const u8) bool {
     return std.mem.startsWith(u8, line, "Vk");
 }
 
-fn processInlineVkFn(self: *const TextData, idx: usize) !usize {
+fn processInlineFnVk(self: *const TextData, idx: usize) !usize {
     var start: usize = idx;
     {
         const line = self.getNextLine(start);
-        start +%= line.len;
+        start +%= line.len +% nub;
 
         // get title
         const title_end = std.mem.indexOfScalar(u8, line, '(').?;
@@ -232,7 +226,7 @@ fn processInlineVkFn(self: *const TextData, idx: usize) !usize {
 
     while (true) {
         const line = self.getNextLine(start);
-        start +%= line.len;
+        start +%= line.len +% nub;
         try self.write(line);
         if (std.mem.eql(u8, line, "}")) break;
     }
@@ -245,17 +239,17 @@ fn processInlineFn(self: *const TextData, idx: usize) !usize {
     var start: usize = idx;
     while (start < len) {
         const line = self.getNextLine(start);
-        start +%= line.len;
+        start +%= line.len +% nub;
         try self.write(line);
         if (std.mem.eql(u8, line, "}")) break;
     }
     return start;
 }
 
-fn processExternVkFn(self: *const TextData, idx: usize) !usize {
+fn processExternFnVk(self: *const TextData, idx: usize) !usize {
     var start = idx;
     const line = self.getNextLine(start);
-    start +%= line.len;
+    start +%= line.len +% nub;
 
     var rline = try replaceVkStrs(self.allo, line);
     defer self.allo.free(rline);
@@ -289,7 +283,7 @@ fn processExternFn(self: *const TextData, idx: usize) !usize {
     // TODO: write line as is, but needs to import data at top: const DWORD = std.os.windows.DWORD;
     var start = idx;
     const line = self.getNextLine(start);
-    start +%= line.len;
+    start +%= line.len +% nub;
     try self.write(line);
     return start;
 }
@@ -298,7 +292,7 @@ fn processExternVar(self: *const TextData, idx: usize) !usize {
     // TODO: write line as is, but needs to import data at top: const DWORD = std.os.windows.DWORD;
     var start = idx;
     const line = self.getNextLine(start);
-    start +%= line.len;
+    start +%= line.len +% nub;
     try self.write(line);
     return start;
 }
@@ -307,7 +301,7 @@ fn processExternConst(self: *const TextData, idx: usize) !usize {
     // TODO: write line as is, but needs to import data at top: const DWORD = std.os.windows.DWORD;
     var start = idx;
     const line = self.getNextLine(start);
-    start +%= line.len;
+    start +%= line.len +% nub;
     try self.write(line);
     return start;
 }
@@ -316,7 +310,7 @@ fn processExportVar(self: *const TextData, idx: usize) !usize {
     // TODO: write line as is, but need to import data at top;
     var start = idx;
     const line = self.getNextLine(start);
-    start +%= line.len;
+    start +%= line.len +% nub;
     try self.write(line);
     return start;
 }
@@ -325,7 +319,7 @@ fn processFn(self: *const TextData, idx: usize) !usize {
     var start: usize = idx;
     while (true) {
         const line = self.getNextLine(start);
-        start +%= line.len;
+        start +%= line.len +% nub;
         try self.write(line);
         if (std.mem.eql(u8, line, "}")) break;
     }
@@ -335,7 +329,7 @@ fn processFn(self: *const TextData, idx: usize) !usize {
 fn processPFN(self: *const TextData, idx: usize) !usize {
     var start = idx;
     const line = self.getNextLine(start);
-    start +%= line.len;
+    start +%= line.len +% nub;
 
     var rline = try replaceVkStrs(self.allo, line);
     defer self.allo.free(rline);
@@ -368,7 +362,7 @@ fn processPFN(self: *const TextData, idx: usize) !usize {
 fn processImport(self: *const TextData, idx: usize) !usize {
     var start = idx;
     const line = self.getNextLine(start);
-    start +%= line.len;
+    start +%= line.len +% nub;
     try self.write(line);
     return start;
 }
@@ -376,9 +370,9 @@ fn processImport(self: *const TextData, idx: usize) !usize {
 fn processOpaque(self: *const TextData, idx: usize) !usize {
     var start = idx;
     const line = self.getNextLine(start);
-    start +%= line.len;
+    start +%= line.len +% nub;
     const line1 = self.getNextLine(start);
-    start +%= line1.len;
+    start +%= line1.len +% nub;
 
     const prefix = "pub const ";
     const space_idx = std.mem.indexOfScalar(u8, line1[prefix.len..], ' ').?;
@@ -391,11 +385,11 @@ fn processOpaque(self: *const TextData, idx: usize) !usize {
     return start;
 }
 
-fn processVkExternStruct(self: *const TextData, idx: usize) !usize {
+fn processExternStructVk(self: *const TextData, idx: usize) !usize {
     var start = idx;
     { // title
         const line = self.getNextLine(start);
-        start +%= line.len;
+        start +%= line.len +% nub;
 
         const prefix = "pub const struct_Vk";
         const space_idx = std.mem.indexOfScalar(u8, line[prefix.len..], ' ').?;
@@ -413,19 +407,18 @@ fn processVkExternStruct(self: *const TextData, idx: usize) !usize {
     // body
     while (true) {
         const line = self.getNextLine(start);
-        start +%= line.len;
+        start +%= line.len +% nub;
 
         const rline = try replaceVkStrs(self.allo, line);
         defer self.allo.free(rline);
         try self.write(rline);
 
-        if (std.mem.eql(u8, line, "}")) break;
+        if (std.mem.eql(u8, line, "};")) break;
     }
 
     // skip next line
     const line1 = self.getNextLine(start);
-    start +%= line1.len;
-
+    start +%= line1.len +% nub;
     return start;
 }
 
@@ -433,13 +426,13 @@ fn processExternStruct(self: *const TextData, idx: usize) !usize {
     var start = idx;
     {
         const line = self.getNextLine(start);
-        start +%= line.len;
+        start +%= line.len +% nub;
         try self.write(line);
     }
 
     while (true) {
         const line = self.getNextLine(start);
-        start +%= line.len;
+        start +%= line.len +% nub;
     }
 
     return start;
@@ -531,7 +524,7 @@ fn replaceVkStrs(allo: std.mem.Allocator, data: []const u8) ![]u8 {
 }
 
 fn getEndOfCurrLine(self: *const TextData, start: usize) usize {
-    return std.mem.indexOfScalar(u8, self.data[start..], '\n') orelse self.data.len;
+    return std.mem.indexOfScalar(u8, self.data[start..], '\n') orelse (self.data.len -% start);
 }
 
 fn getStartOfPrevLine(self: *const TextData, start: usize) usize {

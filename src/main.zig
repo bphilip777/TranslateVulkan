@@ -37,19 +37,19 @@ pub fn main() !void {
     const src_dir = "src/test/src/";
     const dst_dir = "src/test/dst/";
 
-    // const filepath = "vulkan_inline_vk_fn.zig";
-    // const filepath = "vulkan_inline_fn.zig";
-    // const filepath = "vulkan_extern_vk_fn.zig";
-    // const filepath = "vulkan_extern_fn.zig";
-    // const filepath = "vulkan_extern_var.zig";
-    // const filepath = "vulkan_extern_const.zig";
-    // const filepath = "vulkan_export_var.zig";
-    // const filepath = "vulkan_fn.zig";
-    // const filepath = "vulkan_pfn.zig";
-    // const filepath = "vulkan_import.zig";
-    // const filepath = "vulkan_opaque.zig";
-    const filepath = "vulkan_vk_extern_struct.zig";
-    // const filepath = "vulkan_extern_struct.zig";
+    // const filepath = "inline_fn_vk.zig";
+    // const filepath = "inline_fn.zig";
+    // const filepath = "extern_fn_vk.zig";
+    // const filepath = "extern_fn.zig";
+    // const filepath = "extern_var.zig";
+    // const filepath = "extern_const.zig";
+    // const filepath = "export_var.zig";
+    // const filepath = "fn.zig";
+    // const filepath = "pfn.zig";
+    // const filepath = "import.zig";
+    // const filepath = "opaque.zig";
+    // const filepath = "extern_struct_vk.zig";
+    const filepath = "extern_struct.zig";
 
     const src_path = src_dir.* ++ filepath.*;
     const dst_path = dst_dir.* ++ filepath.*;
