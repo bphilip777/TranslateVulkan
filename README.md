@@ -9,7 +9,7 @@ zig translate-c -IVulkan/Include -lc -DVK_USE_PLATFORM_WIN32_KHR=1
 
 Inside your zig project folder
 ```
-zig fetch --save git+
+zig fetch --save git+https://github.com/bphilip777/TranslateVulkan.git
 ```
 
 Add to your build.zig build fn:
