@@ -396,37 +396,54 @@ fn processVkExternStruct(self: *const TextData, idx: usize) !usize {
     { // title
         const line = self.getNextLine(start);
         start +%= line.len;
+
+        const prefix = "pub const struct_Vk";
+        const space_idx = std.mem.indexOfScalar(u8, line[prefix.len..], ' ').?;
+        const new_name = line[prefix.len .. prefix.len +% space_idx];
+
+        const new_title = try std.fmt.allocPrint(
+            self.allo,
+            "pub const {s} = extern struct {{\n",
+            .{new_name},
+        );
+        defer self.allo.free(new_title);
+        try self.write(new_title);
     }
 
     // body
     while (true) {
         const line = self.getNextLine(start);
         start +%= line.len;
-        if (std.mem.eql(u8, line, "}")) break;
 
         const rline = try replaceVkStrs(self.allo, line);
         defer self.allo.free(rline);
         try self.write(rline);
+
+        if (std.mem.eql(u8, line, "}")) break;
     }
+
+    // skip next line
+    const line1 = self.getNextLine(start);
+    start +%= line1.len;
 
     return start;
 }
 
-// fn processExternStruct(self: *const TextData, idx: usize) !usize {
-//     var start = idx;
-//     {
-//         const line = self.getNextLine(start);
-//         start +%= line.len;
-//         try self.write(line);
-//     }
-//
-//     while (true) {
-//         const line = self.getNextLine(start);
-//         start +%= line.len;
-//     }
-//
-//     return start;
-// }
+fn processExternStruct(self: *const TextData, idx: usize) !usize {
+    var start = idx;
+    {
+        const line = self.getNextLine(start);
+        start +%= line.len;
+        try self.write(line);
+    }
+
+    while (true) {
+        const line = self.getNextLine(start);
+        start +%= line.len;
+    }
+
+    return start;
+}
 
 // fn processEnum1(self: *const TextData, start: u32) !u32 {
 //     std.debug.print("Inside Enum 1\n", .{});
