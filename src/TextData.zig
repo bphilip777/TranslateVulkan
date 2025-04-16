@@ -20,10 +20,9 @@ pub fn init(
     defer rfile.close();
 
     const stat = try rfile.stat();
-
     const data = try allo.alloc(u8, stat.size);
-    _ = try rfile.readAll(data);
 
+    _ = try rfile.readAll(data);
     const wfile = try std.fs.cwd().createFile(wfilename, .{});
 
     return TextData{
@@ -40,57 +39,30 @@ pub fn deinit(self: *TextData) void {
 
 pub fn parse(self: *const TextData) !void {
     const data = self.data;
-    const len = @as(u32, @truncate(data.len));
-    const strs = [_][]const u8{ "pub", "const", ";", "{" };
-
-    var i: u32 = 0;
-    while (i < len) {
-        if (len -% i < strs[0].len) break;
-        const pub_idx = indexOf(data[i..], @truncate(strs[0].len), strs[0].ptr) orelse break;
-        const start: u32 = i +% pub_idx;
-        i = start +% @as(u32, @truncate(strs[0].len));
-
-        const semicolon_idx = (indexOf(data[i..], @truncate(strs[2].len), strs[2].ptr) orelse len) +% @as(u32, @truncate(strs[2].len));
-        const bracket_idx = (indexOf(data[i..], @truncate(strs[3].len), strs[3].ptr) orelse len) +% @as(u32, @truncate(strs[3].len));
-        const min_idx = @min(semicolon_idx, bracket_idx);
-
-        const end: u32 = i +% min_idx;
-        i = end;
-
+    const len: u32 = @truncate(data.len);
+    var start: u32 = 0;
+    var end: u32 = 0;
+    while (start < len) {
+        end = start +% @as(u32, @truncate(self.getEndOfCurrLine(start)));
         const line = data[start..end];
-        std.debug.print("{s}\n", .{line});
-        // const line_type: LineType = try determineLineType(line);
-        const line_type: LineType = determineLineType(line) orelse continue;
-        std.debug.print("Line Type: {s}\n", .{@tagName(line_type)});
-
-        i +%= switch (line_type) {
-            .inline_fn => try self.processInlineFn(start),
-            .inline_vk_fn => try self.processInlineVkFn(start),
-            .extern_fn => try self.processExternFn(start),
-            .extern_vk_fn => try self.processExternVkFn(start),
-            .extern_var => try self.processExternVar(start),
-            .@"fn" => try self.processFn(start),
-            .extern_const => try self.processExternConst(start),
-            .export_var => try self.processExportVar(start),
-
-            .pfn => try self.processPFN(start),
-            .import => try self.processImport(start),
-            .@"opaque" => try self.processOpaque(start),
-            .extern_struct => try self.processExternStruct(start),
-            .enum1 => try self.processEnum1(start),
-            .enum2 => try self.processEnum2(start),
-            .base => try self.processBase(start),
-
-            .skip => try self.processSkip(start),
-        };
+        // std.debug.print("Line: {s}\n", .{line});
+        const linetype = determineLineType(line).?;
+        // std.debug.print("LineType: {s}\n", .{@tagName(linetype)});
+        switch (linetype) {
+            .inline_vk_fn => start = (try self.processInlineVkFn(start)) +% 1,
+            .inline_fn => start = (try self.processInlineFn(start)) +% 1,
+            // .enum1 => processEnum1(),
+            .skip => start = end +% 1,
+            else => {},
+        }
     }
 }
 
 const LineType = enum {
-    inline_fn,
     inline_vk_fn,
-    extern_fn,
+    inline_fn,
     extern_vk_fn,
+    extern_fn,
     extern_var,
     @"fn",
     extern_const,
@@ -108,66 +80,62 @@ const LineType = enum {
 };
 
 fn determineLineType(line: []const u8) ?LineType {
-    if (isInlineFn(line)) return .inline_fn;
-    if (isInlineVkFn(line)) return .inline_vk_fn;
-    if (isExternFn(line)) return .extern_fn;
-    if (isExternVkFn(line)) return .extern_vk_fn;
-    if (isExternVar(line)) return .extern_var;
-    if (isFn(line)) return .@"fn";
-    if (isExternConst(line)) return .extern_const;
-    if (isExportVar(line)) return .export_var;
+    const strs = [_][]const u8{ "pub", "const" };
+    if (!std.mem.startsWith(u8, line, strs[0])) return null;
 
-    if (isPubConst(line)) {
-        const line1 = line[pub_const.len..line.len];
-        if (isPFN(line1)) return .pfn;
-        if (isImport(line1)) return .import;
-        if (isOpaque(line1)) return .@"opaque";
-        if (isExternStruct(line1)) return .extern_struct;
-        if (isSkip(line1)) return .skip;
-        if (isEnum1(line1)) return .enum1;
-        if (isEnum2(line1)) return .enum2;
-        return .base;
-    }
+    const line1 = line[strs[0].len +% 1 .. line.len];
+    if (isInlineVkFn(line1)) return .inline_vk_fn;
+    if (isInlineFn(line1)) return .inline_fn;
+    if (isExternVkFn(line1)) return .extern_vk_fn;
+    if (isExternFn(line1)) return .extern_fn;
+    if (isExternVar(line1)) return .extern_var;
+    if (isFn(line1)) return .@"fn";
+    if (isExternConst(line1)) return .extern_const;
+    if (isExportVar(line1)) return .export_var;
 
-    return null;
-}
-
-const pub_const = "pub const ";
-fn isPubConst(line: []const u8) bool {
-    return std.mem.startsWith(u8, line, pub_const);
-}
-
-fn isInlineFn(line: []const u8) bool {
-    return std.mem.startsWith(u8, line, "pub inline fn") and !isInlineVkFn(line);
+    if (!std.mem.startsWith(u8, line1, strs[1])) return null;
+    const line2 = line1[strs[1].len +% 1 .. line1.len];
+    if (isPFN(line2)) return .pfn;
+    if (isImport(line2)) return .import;
+    if (isOpaque(line2)) return .@"opaque";
+    if (isExternStruct(line2)) return .extern_struct;
+    if (isSkip(line2)) return .skip;
+    if (isEnum1(line2)) return .enum1;
+    if (isEnum2(line2)) return .enum2;
+    return .base;
 }
 
 fn isInlineVkFn(line: []const u8) bool {
-    return std.mem.startsWith(u8, line, "pub inline fn VK_");
+    return std.mem.startsWith(u8, line, "inline fn VK_");
 }
 
-fn isExternFn(line: []const u8) bool {
-    return std.mem.startsWith(u8, line, "pub extern fn") and !isExternVkFn(line);
+fn isInlineFn(line: []const u8) bool {
+    return std.mem.startsWith(u8, line, "inline fn");
 }
 
 fn isExternVkFn(line: []const u8) bool {
-    return std.mem.startsWith(u8, line, "pub extern fn vk");
+    return std.mem.startsWith(u8, line, "extern fn vk");
+}
+
+fn isExternFn(line: []const u8) bool {
+    return std.mem.startsWith(u8, line, "extern fn");
 }
 
 fn isExternVar(line: []const u8) bool {
-    return std.mem.startsWith(u8, line, "pub extern var");
+    return std.mem.startsWith(u8, line, "extern var");
 }
 
 fn isFn(line: []const u8) bool {
     // MarkAllocaS - example to check - two nested brackets
-    return std.mem.startsWith(u8, line, "pub fn");
+    return std.mem.startsWith(u8, line, "fn");
 }
 
 fn isExternConst(line: []const u8) bool {
-    return std.mem.startsWith(u8, line, "pub extern const");
+    return std.mem.startsWith(u8, line, "extern const");
 }
 
 fn isExportVar(line: []const u8) bool {
-    return std.mem.startsWith(u8, line, "pub export var");
+    return std.mem.startsWith(u8, line, "export var");
 }
 
 fn isSkip(line: []const u8) bool {
@@ -205,253 +173,248 @@ fn isType(line: []const u8) bool {
     return std.mem.startsWith(u8, line, "Vk");
 }
 
-fn processInlineFn(self: *const TextData, start: u32) !u32 {
-    const end = indexOf(self.data[start..], 1, "}").?;
-    const data = self.data[start .. start +% end +% 1];
-    try self.write(data);
-    return end;
-}
-
-fn processInlineVkFn(self: *const TextData, start: u32) !u32 {
-    const end = indexOf(self.data[start..], 1, "}").?;
-    const data = self.data[start .. start +% end +% 1];
-
-    const rdata = try std.mem.replaceOwned(u8, self.allo, data, "VK_", "");
-    defer self.allo.free(rdata);
-    try self.write(rdata);
-
-    return end;
-}
-
-fn processExternFn(self: *const TextData, start: u32) !u32 {
-    const end = indexOf(self.data[start..], 1, ";").?;
-    try self.write(self.data[start .. start +% end +% 1]);
-    return end;
-}
-
-fn processExternVkFn(self: *const TextData, start: u32) !u32 {
-    const end = indexOf(self.data[start..], 1, ";").?;
-    const data = self.data[start .. start +% end +% 1];
-
-    var rdata = try relaceVkStrs(self.allo, data);
-    for (
-        [_][]const u8{ " vk", "]Vk", " Vk" },
-        [_][]const u8{ " ", "]", " " },
-    ) |ostr, nstr| {
-        const temp = try std.mem.replaceOwned(u8, self.allo, rdata, ostr, nstr);
-        self.allo.free(rdata);
-        rdata = temp;
+fn processInlineFn(self: *const TextData, idx: u32) !u32 {
+    const len: u32 = @truncate(self.data.len);
+    var start: u32 = idx;
+    var end: u32 = undefined;
+    while (start < len) {
+        end = start +% @as(u32, @truncate(self.getEndOfCurrLine(start)));
+        const line = self.data[start..end];
+        try self.write(line);
+        if (std.mem.eql(u8, line, "}")) break;
+        start = end +% 1;
     }
-
-    // lowercase first letter of fn
-    {
-        const prefix = "pub extern fn ";
-        rdata[prefix.len] = std.ascii.toLower(rdata[prefix.len]);
-    }
-
-    // change case
-    var curr_idx = std.mem.indexOfScalar(u8, rdata, '(').?;
-
-    while (true) {
-        const colon_idx = std.mem.indexOfScalar(u8, rdata[curr_idx..], ':') orelse break;
-        curr_idx +%= colon_idx +% 1;
-
-        const prev_space_idx = std.mem.lastIndexOfScalar(u8, rdata[0..curr_idx], ' ') orelse 0;
-        const prev_paren_idx = std.mem.lastIndexOfScalar(u8, rdata[0..curr_idx], '(') orelse 0;
-        const max_idx = @max(prev_space_idx, prev_paren_idx) +% 1;
-        const old_str = rdata[max_idx .. curr_idx -% 1];
-
-        var new_len: u8 = @truncate(old_str.len);
-        for (old_str[0 .. old_str.len - 1], old_str[1..old_str.len]) |ch1, ch2| {
-            if (std.ascii.isLower(ch1) and std.ascii.isUpper(ch2)) new_len +%= 1;
-        }
-        if (new_len == 0) return error.StringTooShort;
-        const new_data: []u8 = try self.allo.alloc(u8, new_len);
-        defer self.allo.free(new_data);
-        const new_str = cc.convert(new_data, old_str, .snake, .camel) catch |err| {
-            std.debug.print("{s}\n", .{old_str});
-            return err;
-        };
-
-        const temp = try std.mem.replaceOwned(u8, self.allo, rdata, old_str, new_str);
-        self.allo.free(rdata);
-        rdata = temp;
-    }
-
-    try self.write(rdata);
     return end;
 }
 
-fn processExternVar(self: *const TextData, start: u32) !u32 {
-    const end = indexOf(self.data[start..], 1, ";").?;
-    try self.write(self.data[start .. start +% end +% 1]);
+fn processInlineVkFn(self: *const TextData, idx: u32) !u32 {
+    const data = self.data;
+    // const len: u32 = @truncate(self.data.len);
+
+    const start: u32 = idx;
+    const end: u32 = start +% @as(u32, @truncate(self.getEndOfCurrLine(start)));
+    const line = data[start..end];
+
+    // get title
+    const title_end = std.mem.indexOfScalar(u8, line, '(').?;
+    const title_start = std.mem.lastIndexOfScalar(u8, line[0..title_end], ' ').?;
+    const title = line[title_start +% 4 .. title_end];
+    std.debug.print("Title: {s}\n", .{title});
+
+    const new_title = try cc.convert(self.allo, title, .camel);
+    defer self.allo.free(new_title);
+    std.debug.print("New Title: {s}\n", .{new_title});
+
+    // while (start < len) {
+    //     try self.write(line);
+    //     if (std.mem.eql(u8, line, "}")) break;
+    //     start = end +% 1;
+    // }
+
     return end;
 }
 
-fn processFn(self: *const TextData, start: u32) !u32 {
-    var temp_start = start;
+// fn processExternFn(self: *const TextData, start: u32) !u32 {
+//     const end = self.getEndOfCurrLine(start);
+//     const line = self.data[start..end];
+//     try self.write(line);
+//     return end;
+// }
+//
+// fn processExternVkFn(self: *const TextData, start: u32) !u32 {
+//     const end = self.getEndOfCurrLine(start);
+//     const line = self.data[start..end];
+//     var rline = try relaceVkStrs(self.allo, line);
+//     for (
+//         [_][]const u8{ " vk", "]Vk", " Vk" },
+//         [_][]const u8{ " ", "]", " " },
+//     ) |ostr, nstr| {
+//         const temp = try std.mem.replaceOwned(u8, self.allo, rline, ostr, nstr);
+//         self.allo.free(rline);
+//         rline = temp;
+//     }
+//
+//     // lowercase first letter of fn
+//     {
+//         const prefix = "pub extern fn ";
+//         rline[prefix.len] = std.ascii.toLower(rline[prefix.len]);
+//     }
+//
+//     // change case
+//     var curr_idx = std.mem.indexOfScalar(u8, rline, '(').?;
+//
+//     while (true) {
+//         const colon_idx = std.mem.indexOfScalar(u8, rline[curr_idx..], ':') orelse break;
+//         curr_idx +%= colon_idx +% 1;
+//
+//         const prev_space_idx = std.mem.lastIndexOfScalar(u8, rline[0..curr_idx], ' ') orelse 0;
+//         const prev_paren_idx = std.mem.lastIndexOfScalar(u8, rline[0..curr_idx], '(') orelse 0;
+//         const max_idx = @max(prev_space_idx, prev_paren_idx) +% 1;
+//         const old_str = rline[max_idx .. curr_idx -% 1];
+//
+//         var new_len: u8 = @truncate(old_str.len);
+//         for (old_str[0 .. old_str.len - 1], old_str[1..old_str.len]) |ch1, ch2| {
+//             if (std.ascii.isLower(ch1) and std.ascii.isUpper(ch2)) new_len +%= 1;
+//         }
+//         if (new_len == 0) return error.StringTooShort;
+//         const new_data: []u8 = try self.allo.alloc(u8, new_len);
+//         defer self.allo.free(new_data);
+//         const new_str = cc.convert(new_data, old_str, .snake, .camel) catch |err| {
+//             std.debug.print("{s}\n", .{old_str});
+//             return err;
+//         };
+//
+//         const temp = try std.mem.replaceOwned(u8, self.allo, rline, old_str, new_str);
+//         self.allo.free(rline);
+//         rline = temp;
+//     }
+//     try self.write(rline);
+//     return end;
+// }
+//
+// fn processExternVar(self: *const TextData, start: u32) !u32 {
+//     const end = self.getEndOfCurrLine(start);
+//     const line = self.data[start..end];
+//     try self.write(line);
+//     return end;
+// }
+//
+// fn processFn(self: *const TextData, start: u32) !u32 {
+//     var temp_start = start;
+//
+//     var open_paren: u32 = undefined;
+//     var close_paren: u32 = undefined;
+//     while (true) {
+//         open_paren = indexOf(self.data[temp_start..], 1, "{") orelse @truncate(self.data.len);
+//         close_paren = indexOf(self.data[temp_start..], 1, "}").?;
+//         if (close_paren < open_paren) break;
+//         temp_start = close_paren +% 1;
+//     }
+//     const end: u32 = start +% temp_start +% close_paren +% 1;
+//     const line = self.data[start..end];
+//     try self.write(line);
+//     return end;
+// }
+//
+// fn processExternConst(self: *const TextData, start: u32) !u32 {
+//     const end = self.getEndOfCurrLine(start);
+//     const line = self.data[start..end];
+//     try self.write(line);
+//     return end;
+// }
+//
+// fn processExportVar(self: *const TextData, start: u32) !u32 {
+//     const end = self.getEndOfCurrLine(start);
+//     const line = self.data[start..end];
+//     try self.write(line);
+//     return end;
+// }
+//
+// fn processPFN(self: *const TextData, start: u32) !u32 {
+//     const end = self.getEndOfCurrLine(start);
+//     const line = self.data[start..end];
+//     const rline = try relaceVkStrs(self.allo, line);
+//     defer self.allo.free(rline);
+//     try self.write(rline);
+//     return end;
+// }
+//
+// fn processImport(self: *const TextData, start: u32) !u32 {
+//     const end = self.getEndOfCurrLine(start);
+//     const line = self.data[start..end];
+//     try self.write(line);
+//     return end;
+// }
 
-    var open_paren: u32 = undefined;
-    var close_paren: u32 = undefined;
-    while (true) {
-        open_paren = indexOf(self.data[temp_start..], 1, "{") orelse @truncate(self.data.len);
-        close_paren = indexOf(self.data[temp_start..], 1, "}").?;
-        if (close_paren < open_paren) break;
-        temp_start = close_paren +% 1;
-    }
-    const end: u32 = temp_start +% close_paren;
-    try self.write(self.data[start .. start +% end +% 1]);
-    return end;
-}
+// fn processOpaque(self: *const TextData, start: u32) !u32 {
+//     const end = self.getEndOfCurrLine(start);
+//     const line = self.data[start..end];
+//
+//     var rline = try relaceVkStrs(self.allo, line);
+//     defer self.allo.free(rline);
+//
+//     const eql_pos = std.mem.indexOfScalar(u8, rline, '=').?;
+//     const name = rline[pub_const.len .. eql_pos - 1];
+//
+//     const str = try std.fmt.allocPrint(self.allo, "pub const {s} = enum(u64){{null=0, _}};\n", .{name});
+//     defer self.allo.free(str);
+//
+//     try self.write(str);
+//     return end;
+// }
 
-fn processExternConst(self: *const TextData, start: u32) !u32 {
-    // TODO: consider using an enum
-    const end = indexOf(self.data[start..], 1, ";").?;
-    const data = self.data[start .. start +% end +% 1];
-    try self.write(data);
-    return end;
-}
+// fn processExternStruct(self: *const TextData, start: u32) !u32 {
+//     const end = self.getEndOfCurrLine(start);
+//     const line = self.data[start..end];
+//     try self.write(line);
+//     return end;
+// }
 
-fn processExportVar(self: *const TextData, start: u32) !u32 {
-    const end = indexOf(self.data[start..], 1, ";").?;
-    const data = self.data[start .. start +% end +% 1];
-    try self.write(data);
-    return end;
-}
+// fn processEnum1(self: *const TextData, start: u32) !u32 {
+//     std.debug.print("Inside Enum 1\n", .{});
+//
+//     const end = self.getNextNewLine(start);
+//     const data = self.data[start..end];
+//     std.debug.print("Data: {s}\n", .{data});
+//
+//     // extract title
+//     const next_start = end +% 1;
+//     const next_end = self.getNextNewLine(next_start);
+//     const next_data = self.data[next_start..next_end];
+//     std.debug.print("Next Data: {s}\n", .{next_data});
+//
+//     const curr_end: u32 = start -% 1;
+//     while (true) {
+//         const prev_start = self.getStartOfPrevLine(curr_end);
+//         const line =
+//         std.debug.print("Line: {s}\n", .{line});
+//
+//         const semicolon_idx = std.mem.indexOfScalar(u8, line, ':') orelse break;
+//         const screaming_snake_name = line[0..semicolon_idx];
+//         if (!cc.isCase(screaming_snake_name, .screaming_snake)) break;
+//         std.debug.print("Screaming Snake Name: {s}\n", .{screaming_snake_name});
+//
+//         const snake_name = try self.allo.alloc(u8, screaming_snake_name.len);
+//         defer self.allo.free(snake_name);
+//         _ = try cc.convert(snake_name, screaming_snake_name, .snake, .screaming_snake);
+//         std.debug.print("Snake Name: {s}\n", .{snake_name});
+//
+//         break;
+//     }
+//
+//     // var curr: u32 = start;
+//     // while (true) {
+//     //     const prev_start: u32 = @truncate(std.mem.lastIndexOf(u8, data[0..curr], "pub const") orelse break);
+//     //     const prev_end: u32 = @truncate(std.mem.lastIndexOfScalar(u8, data[0..curr], ';') orelse break);
+//     //     if (prev_start >= prev_end) break;
+//     //     std.debug.print("{s}\n", .{self.data[prev_start..prev_end]});
+//     //     curr = prev_start;
+//     // }
+//
+//     try self.write(data);
+//     return len;
+// }
 
-fn processPFN(self: *const TextData, start: u32) !u32 {
-    const end = indexOf(self.data[start..], 1, ";").?;
-    const data = self.data[start .. start +% end +% 1];
-
-    const rdata = try relaceVkStrs(self.allo, data);
-    defer self.allo.free(rdata);
-
-    // const prefix = "pub const PFN_";
-    // rdata[prefix.len] = std.ascii.toLower(rdata[prefix.len]);
-
-    try self.write(rdata);
-    return end;
-}
-
-fn processImport(self: *const TextData, start: u32) !u32 {
-    const end = indexOf(self.data[start..], 1, ";").?;
-    try self.write(self.data[start .. start +% end +% 1]);
-    return end;
-}
-
-fn processOpaque(self: *const TextData, start: u32) !u32 {
-    const end = indexOf(self.data[start..], 1, ";").?;
-    const data = self.data[start .. start +% end +% 1];
-
-    var rdata = try relaceVkStrs(self.allo, data);
-    defer self.allo.free(rdata);
-
-    const eql_pos = std.mem.indexOfScalar(u8, rdata, '=').?;
-    const name = rdata[pub_const.len .. eql_pos - 1];
-
-    const str = try std.fmt.allocPrint(self.allo, "pub const {s} = enum(u64){{null=0, _}};\n", .{name});
-    defer self.allo.free(str);
-
-    try self.write(str);
-    return end;
-}
-
-fn processExternStruct(self: *const TextData, start: u32) !u32 {
-    const end = indexOf(self.data[start..], 1, "};").?;
-    const data = self.data[start .. start +% end +% 1];
-    try self.write(data);
-    return end;
-}
-
-fn processEnum1(self: *const TextData, start: u32) !u32 {
-    const end = indexOf(self.data[start..], 1, ";").?;
-    const data = self.data[start .. start +% end +% 1];
-    std.debug.print("{s}\n", .{data});
-
-    var curr: u32 = start;
-    while (true) {
-        const prev_start: u32 = @truncate(std.mem.lastIndexOf(u8, data[0..curr], "pub const") orelse break);
-        const prev_end: u32 = @truncate(std.mem.lastIndexOfScalar(u8, data[0..curr], ';') orelse break);
-        if (prev_start >= prev_end) break;
-        std.debug.print("{s}\n", .{self.data[prev_start..prev_end]});
-        curr = prev_start;
-    }
-
-    try self.write(data);
-    return end;
-}
-
-fn processEnum2(self: *const TextData, start: u32) !u32 {
-    const end = indexOf(self.data[start..], 1, ";").?;
-    const data = self.data[start .. start +% end +% 1];
-    std.debug.print("{s}\n", .{data});
-    return end;
-}
-
-fn processType(self: *const TextData, start: u32) !u32 {
-    const end = indexOf(self.data[start..], 1, ";").?;
-    const data = self.data[start .. start +% end +% 1];
-    try self.write(data);
-    return end;
-}
-
-fn processBase(self: *const TextData, start: u32) !u32 {
-    const end = indexOf(self.data[start..], 1, ";").?;
-    const data = self.data[start .. start +% end +% 1];
-    try self.write(data);
-    return end;
-}
-
-fn processSkip(self: *const TextData, start: u32) !u32 {
-    const end = indexOf(self.data[start..], 1, ";").?;
-    return end;
-}
-
-fn indexOf(data: []const u8, comptime phrase_len: u32, phrase: [*]const u8) ?u32 {
-    if (data.len == 0) unreachable;
-    if (phrase_len < 1 or phrase_len > 255) unreachable;
-    if (data.len < phrase_len) unreachable;
-    if (data.len == phrase_len and std.mem.eql(u8, data, phrase[0..phrase_len])) return 0;
-
-    var i: u32 = 0;
-    const len: u32 = @truncate(data.len);
-    const vphrase = @as(@Vector(phrase_len, u8), phrase[0..][0..phrase_len].*);
-
-    if (len >= 64) {
-        while (i +% 64 < len) : (i +%= 64) {
-            const vdata_0 = @as(@Vector(64, u8), data[i..][0..64].*);
-
-            const maybe_match = @as(u64, @bitCast(@as(@Vector(64, u8), @splat(phrase[0])) == vdata_0));
-            if (maybe_match == 0) continue;
-
-            const match: u32 = @as(u32, @truncate(BitTricks.indexOfRightmostBit(u64, maybe_match))) -% 1;
-            const vdata_1 = @as(@Vector(phrase_len, u8), data[i +% match ..][0..phrase_len].*);
-
-            if (@reduce(.And, vdata_1 == vphrase)) {
-                return i +% match;
-            }
-        }
-    } else if (i != len) {
-        var temp: [64]u8 = undefined;
-        @memcpy(temp[0 .. len -% i], data[i..len]);
-        @memset(temp[len -% i .. 64], 0);
-
-        const vdata_0 = @as(@Vector(64, u8), temp);
-
-        const maybe_match = @as(u64, @bitCast(@as(@Vector(64, u8), @splat(phrase[0])) == vdata_0));
-        if (maybe_match == 0) return null;
-
-        const match: u32 = @as(u32, @truncate(BitTricks.indexOfRightmostBit(u64, maybe_match))) -% 1;
-        if (match +% phrase_len > len) return null;
-        const vdata_1 = @as(@Vector(phrase_len, u8), data[i +% match ..][0..phrase_len].*);
-
-        if (@reduce(.And, vdata_1 == vphrase)) {
-            return i +% match;
-        }
-    }
-
-    return null;
-}
+// fn processEnum2(self: *const TextData, start: u32) !u32 {
+//     const end = self.getEndOfCurrLine(start);
+//     const line = self.data[start..end];
+//     std.debug.print("{s}\n", .{line});
+//     return end;
+// }
+//
+// fn processType(self: *const TextData, start: u32) !u32 {
+//     const end = self.getEndOfCurrLine(start);
+//     const line = self.data[start..end];
+//     try self.write(line);
+//     return end;
+// }
+//
+// fn processBase(self: *const TextData, start: u32) !u32 {
+//     const end = self.getEndOfCurrLine(start);
+//     const line = self.data[start..end];
+//     try self.write(line);
+//     return end;
+// }
 
 inline fn write(self: *const TextData, line: []const u8) !void {
     _ = try self.wfile.write(line);
@@ -469,4 +432,12 @@ fn relaceVkStrs(allo: std.mem.Allocator, data: []const u8) ![]u8 {
         rdata = temp;
     }
     return rdata;
+}
+
+fn getEndOfCurrLine(self: *const TextData, start: u32) usize {
+    return std.mem.indexOfScalar(u8, self.data[start..], '\n') orelse self.data.len;
+}
+
+fn getStartOfPrevLine(self: *const TextData, start: u32) usize {
+    return std.mem.lastIndexOfScalar(u8, self.data[0..start], '\n') orelse 0;
 }

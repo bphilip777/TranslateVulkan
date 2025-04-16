@@ -6,7 +6,7 @@ pub fn main() !void {
     const allo = da.allocator();
     defer std.debug.assert(.ok == da.deinit());
 
-    const dirpath = "src/test";
+    const dirpath = "src/test/src";
     const dir = try std.fs.cwd().openDir(dirpath, .{ .iterate = true });
 
     var walker = try dir.walk(allo);
@@ -34,8 +34,10 @@ pub fn main() !void {
     //     try text.parse();
     // }
 
-    const src_filepath = "src/test/vulkan_enum1.zig";
-    const dst_filepath = "src/test/parsed_vulkan_enum1.zig";
+    const src_filepath = "src/test/src/vulkan_inline_vk_fn.zig";
+    const dst_filepath = "src/test/dst/vulkan_inline_vk_fn.zig";
+    // const src_filepath = "src/test/src/vulkan_inline_fn.zig";
+    // const dst_filepath = "src/test/dst/vulkan_inline_fn.zig";
     var text = try TextData.init(allo, src_filepath, dst_filepath);
     defer text.deinit();
     try text.parse();

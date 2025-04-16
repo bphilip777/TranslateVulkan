@@ -41,8 +41,8 @@
             .hash = "BitTricks-0.0.0-nTotJiZTAAA6ki_lHBZhYAJ1zMo4nV3DFole6YhHX8YW",
         },
         .CodingCase = .{
-            .url = "git+https://github.com/bphilip777/CodingCase.git#9c9df61265e279ea850548dd1b1c02942d149f54",
-            .hash = "CodingCase-0.0.0-0crabxB4AAAUzrtNKRL2Msr01btEZO48whk6u7ev9O0G",
+            .url = "git+https://github.com/bphilip777/CodingCase.git#327106aded2e47d50c31e7f594717692d4b70eba",
+            .hash = "CodingCase-0.0.0-0crab8I4AAAyytkvLhc6Zb3pEe9nJXARMsELQIK7tDVG",
         },
     },
     .paths = .{
