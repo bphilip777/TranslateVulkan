@@ -45,10 +45,12 @@ pub fn parse(self: *const TextData) !void {
     while (start < data.len) {
         end = start +% self.getEndOfCurrLine(start);
         const line = data[start..end];
+        std.debug.print("Line: {s}\n", .{line});
         const linetype = determineLineType(line) orelse {
             start = end +% 1;
             continue;
         };
+        std.debug.print("LineType: {s}\n", .{@tagName(linetype)});
         switch (linetype) {
             .inline_vk_fn => start = (try self.processInlineVkFn(start)) +% 1,
             .inline_fn => start = (try self.processInlineFn(start)) +% 1,
@@ -61,10 +63,14 @@ pub fn parse(self: *const TextData) !void {
             .pfn => start = (try self.processPFN(start)) +% 1,
             .import => start = (try self.processImport(start)) +% 1,
             .@"opaque" => start = (try self.processOpaque(start)) +% 1,
+            .vk_extern_struct => start = (try self.processVkExternStruct(start)) +% 1,
+            .extern_struct => start = (try self.processExternStruct(start)) +% 1,
 
             .skip => start = end +% 1,
             else => {},
         }
+        std.debug.print("Start: {}\n", .{start});
+        break;
     }
 }
 
@@ -84,6 +90,8 @@ const LineType = enum {
     pfn,
     import,
     @"opaque",
+
+    vk_extern_struct,
     extern_struct,
 
     enum1,
@@ -167,11 +175,20 @@ fn isImport(line: []const u8) bool {
 }
 
 fn isOpaque(line: []const u8) bool {
-    return std.mem.endsWith(u8, line, "opaque {};");
+    const newline = if (builtin.os.tag == .windows) std.mem.trimRight(u8, line, "\r\n") else line;
+    return std.mem.endsWith(u8, newline, "opaque {};");
+}
+
+fn isVkExternStruct(line: []const u8) bool {
+    const newline = if (builtin.os.tag == .windows) std.mem.trimRight(u8, line, "\r\n") else line;
+    const startswith = std.mem.startsWith(u8, newline, "struct_Vk");
+    const endswith = std.mem.endsWith(u8, newline, "extern struct {");
+    return startswith and endswith;
 }
 
 fn isExternStruct(line: []const u8) bool {
-    return std.mem.endsWith(u8, line, "extern struct {");
+    const newline = if (builtin.os.tag == .windows) std.mem.trimRight(u8, line, "\r\n") else line;
+    return std.mem.endsWith(u8, newline, "extern struct {");
 }
 
 fn isEnum1(line: []const u8) bool {
@@ -179,9 +196,12 @@ fn isEnum1(line: []const u8) bool {
 }
 
 fn isEnum2(line: []const u8) bool {
-    const eql_idx = (std.mem.indexOfScalar(u8, line, '=') orelse return false) - 1;
-    const name = line[0..eql_idx];
-    return std.mem.endsWith(u8, name, "2") and std.mem.endsWith(u8, line, "VkFlags64;");
+    const newline = if (builtin.os.tag == .windows) std.mem.trimRight(u8, line, "\r\n") else line;
+    const eql_idx = (std.mem.indexOfScalar(u8, newline, '=') orelse return false) - 1;
+    const name = newline[0..eql_idx];
+    const is_ver_2 = std.mem.endsWith(u8, name, "2");
+    const is_flag_ver_2 = std.mem.endsWith(u8, newline, "VkFlags64;");
+    return is_ver_2 and is_flag_ver_2;
 }
 
 fn isType(line: []const u8) bool {
@@ -189,13 +209,10 @@ fn isType(line: []const u8) bool {
 }
 
 fn processInlineVkFn(self: *const TextData, idx: usize) !usize {
-    const data = self.data;
     var start: usize = idx;
-    var end: usize = start +% self.getEndOfCurrLine(start);
-
     {
-        const line = if (builtin.os.tag == .windows) std.mem.trimRight(u8, data[start..end], "\r\n") else data[start..end];
-        start = end +% 1;
+        const line = self.getNextLine(start);
+        start +%= line.len;
 
         // get title
         const title_end = std.mem.indexOfScalar(u8, line, '(').?;
@@ -214,33 +231,31 @@ fn processInlineVkFn(self: *const TextData, idx: usize) !usize {
     }
 
     while (true) {
-        end = start +% self.getEndOfCurrLine(start);
-        const line = if (@import("builtin").os.tag == .windows) std.mem.trimRight(u8, data[start..end], "\r\n") else data[start..end];
-        start = end +% 1;
+        const line = self.getNextLine(start);
+        start +%= line.len;
         try self.write(line);
         if (std.mem.eql(u8, line, "}")) break;
     }
 
-    return end;
+    return start;
 }
 
 fn processInlineFn(self: *const TextData, idx: usize) !usize {
     const len: usize = self.data.len;
     var start: usize = idx;
-    var end: usize = undefined;
     while (start < len) {
-        end = start +% self.getEndOfCurrLine(start);
-        const line = if (builtin.os.tag == .windows) std.mem.trimRight(u8, self.data[start..end], "\r\n") else self.data[start..end];
+        const line = self.getNextLine(start);
+        start +%= line.len;
         try self.write(line);
         if (std.mem.eql(u8, line, "}")) break;
-        start = end +% 1;
     }
-    return end;
+    return start;
 }
 
-fn processExternVkFn(self: *const TextData, start: usize) !usize {
-    const end = start +% self.getEndOfCurrLine(start);
-    const line = self.data[start..end];
+fn processExternVkFn(self: *const TextData, idx: usize) !usize {
+    var start = idx;
+    const line = self.getNextLine(start);
+    start +%= line.len;
 
     var rline = try replaceVkStrs(self.allo, line);
     defer self.allo.free(rline);
@@ -267,58 +282,60 @@ fn processExternVkFn(self: *const TextData, start: usize) !usize {
     }
     try self.write(rline);
 
-    return end;
+    return start;
 }
 
-fn processExternFn(self: *const TextData, start: usize) !usize {
+fn processExternFn(self: *const TextData, idx: usize) !usize {
     // TODO: write line as is, but needs to import data at top: const DWORD = std.os.windows.DWORD;
-    const end = start +% self.getEndOfCurrLine(start);
-    const line = self.data[start..end];
+    var start = idx;
+    const line = self.getNextLine(start);
+    start +%= line.len;
     try self.write(line);
-    return end;
+    return start;
 }
 
-fn processExternVar(self: *const TextData, start: usize) !usize {
+fn processExternVar(self: *const TextData, idx: usize) !usize {
     // TODO: write line as is, but needs to import data at top: const DWORD = std.os.windows.DWORD;
-    const end = start +% self.getEndOfCurrLine(start);
-    const line = self.data[start..end];
+    var start = idx;
+    const line = self.getNextLine(start);
+    start +%= line.len;
     try self.write(line);
-    return end;
+    return start;
 }
 
-fn processExternConst(self: *const TextData, start: usize) !usize {
+fn processExternConst(self: *const TextData, idx: usize) !usize {
     // TODO: write line as is, but needs to import data at top: const DWORD = std.os.windows.DWORD;
-    const end = start +% self.getEndOfCurrLine(start);
-    const line = self.data[start..end];
+    var start = idx;
+    const line = self.getNextLine(start);
+    start +%= line.len;
     try self.write(line);
-    return end;
+    return start;
 }
 
-fn processExportVar(self: *const TextData, start: usize) !usize {
+fn processExportVar(self: *const TextData, idx: usize) !usize {
     // TODO: write line as is, but need to import data at top;
-    const end = start +% self.getEndOfCurrLine(start);
-    const line = self.data[start..end];
+    var start = idx;
+    const line = self.getNextLine(start);
+    start +%= line.len;
     try self.write(line);
-    return end;
+    return start;
 }
 
 fn processFn(self: *const TextData, idx: usize) !usize {
-    const len = self.data.len;
     var start: usize = idx;
-    var end: usize = undefined;
-    while (start < len) {
-        end = start +% self.getEndOfCurrLine(start);
-        const line = if (builtin.os.tag == .windows) std.mem.trimRight(u8, self.data[start..end], "\r\n") else self.data[start..end];
+    while (true) {
+        const line = self.getNextLine(start);
+        start +%= line.len;
         try self.write(line);
         if (std.mem.eql(u8, line, "}")) break;
-        start = end +% 1;
     }
-    return end;
+    return start;
 }
 
-fn processPFN(self: *const TextData, start: usize) !usize {
-    const end = start +% self.getEndOfCurrLine(start);
-    const line = self.data[start..end];
+fn processPFN(self: *const TextData, idx: usize) !usize {
+    var start = idx;
+    const line = self.getNextLine(start);
+    start +%= line.len;
 
     var rline = try replaceVkStrs(self.allo, line);
     defer self.allo.free(rline);
@@ -345,45 +362,77 @@ fn processPFN(self: *const TextData, start: usize) !usize {
     }
     try self.write(rline);
 
-    return end;
+    return start;
 }
 
-fn processImport(self: *const TextData, start: usize) !usize {
-    const end = start +% self.getEndOfCurrLine(start);
-    const line = self.data[start..end];
+fn processImport(self: *const TextData, idx: usize) !usize {
+    var start = idx;
+    const line = self.getNextLine(start);
+    start +%= line.len;
     try self.write(line);
-    return end;
+    return start;
 }
 
-fn processOpaque(self: *const TextData, start: usize) !usize {
-    const end = start +% self.getEndOfCurrLine(start);
-    const line = self.data[start..end];
-
-    var rline = try replaceVkStrs(self.allo, line);
-    defer self.allo.free(rline);
+fn processOpaque(self: *const TextData, idx: usize) !usize {
+    var start = idx;
+    const line = self.getNextLine(start);
+    start +%= line.len;
+    const line1 = self.getNextLine(start);
+    start +%= line1.len;
 
     const prefix = "pub const ";
-    const eql_pos = std.mem.indexOfScalar(u8, rline, '=').?;
-    const name = rline[prefix.len .. eql_pos -% 1];
+    const space_idx = std.mem.indexOfScalar(u8, line1[prefix.len..], ' ').?;
+    const name = line1[prefix.len .. prefix.len +% space_idx];
 
-    const str = try std.fmt.allocPrint(self.allo, "pub const {s} = enum(u64){{null=0, _}};\n", .{name});
-    defer self.allo.free(str);
+    const line2 = try std.fmt.allocPrint(self.allo, "pub const {s} = enum(u64){{ null=0, _ }};\n", .{name});
+    defer self.allo.free(line2);
+    try self.write(line2);
 
-    try self.write(str);
-    return end;
+    return start;
 }
 
-// fn processExternStruct(self: *const TextData, start: u32) !u32 {
-//     const end = self.getEndOfCurrLine(start);
-//     const line = self.data[start..end];
-//     try self.write(line);
-//     return end;
+fn processVkExternStruct(self: *const TextData, idx: usize) !usize {
+    var start = idx;
+    { // title
+        const line = self.getNextLine(start);
+        start +%= line.len;
+    }
+
+    // body
+    while (true) {
+        const line = self.getNextLine(start);
+        start +%= line.len;
+        if (std.mem.eql(u8, line, "}")) break;
+
+        const rline = try replaceVkStrs(self.allo, line);
+        defer self.allo.free(rline);
+        try self.write(rline);
+    }
+
+    return start;
+}
+
+// fn processExternStruct(self: *const TextData, idx: usize) !usize {
+//     var start = idx;
+//     {
+//         const line = self.getNextLine(start);
+//         start +%= line.len;
+//         try self.write(line);
+//     }
+//
+//     while (true) {
+//         const line = self.getNextLine(start);
+//         start +%= line.len;
+//     }
+//
+//     return start;
 // }
 
 // fn processEnum1(self: *const TextData, start: u32) !u32 {
 //     std.debug.print("Inside Enum 1\n", .{});
 //
 //     const end = self.getNextNewLine(start);
+// const line = self.getNextLine(start, end);
 //     const data = self.data[start..end];
 //     std.debug.print("Data: {s}\n", .{data});
 //
@@ -428,6 +477,7 @@ fn processOpaque(self: *const TextData, start: usize) !usize {
 // fn processEnum2(self: *const TextData, start: u32) !u32 {
 //     const end = self.getEndOfCurrLine(start);
 //     const line = self.data[start..end];
+// const line = self.getNextLine(start, end);
 //     std.debug.print("{s}\n", .{line});
 //     return end;
 // }
@@ -435,6 +485,7 @@ fn processOpaque(self: *const TextData, start: usize) !usize {
 // fn processType(self: *const TextData, start: u32) !u32 {
 //     const end = self.getEndOfCurrLine(start);
 //     const line = self.data[start..end];
+// const line = self.getNextLine(start, end);
 //     try self.write(line);
 //     return end;
 // }
@@ -442,6 +493,7 @@ fn processOpaque(self: *const TextData, start: usize) !usize {
 // fn processBase(self: *const TextData, start: u32) !u32 {
 //     const end = self.getEndOfCurrLine(start);
 //     const line = self.data[start..end];
+// const line = self.getNextLine(start, end);
 //     try self.write(line);
 //     return end;
 // }
@@ -467,4 +519,9 @@ fn getEndOfCurrLine(self: *const TextData, start: usize) usize {
 
 fn getStartOfPrevLine(self: *const TextData, start: usize) usize {
     return std.mem.lastIndexOfScalar(u8, self.data[0..start], '\n') orelse 0;
+}
+
+fn getNextLine(self: *const TextData, start: usize) []const u8 {
+    const end = start +% self.getEndOfCurrLine(start);
+    return if (builtin.os.tag == .windows) std.mem.trimRight(u8, self.data[start..end], "\r\n") else self.data[start..end];
 }

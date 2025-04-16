@@ -47,7 +47,8 @@ pub fn main() !void {
     // const filepath = "vulkan_fn.zig";
     // const filepath = "vulkan_pfn.zig";
     // const filepath = "vulkan_import.zig";
-    const filepath = "vulkan_opaque.zig";
+    // const filepath = "vulkan_opaque.zig";
+    const filepath = "vulkan_extern_struct.zig";
 
     const src_path = src_dir.* ++ filepath.*;
     const dst_path = dst_dir.* ++ filepath.*;
