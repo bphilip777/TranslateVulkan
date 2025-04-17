@@ -3,7 +3,6 @@ const builtin = @import("builtin");
 const nub = if (builtin.os.tag == .windows) 2 else 1; // "\r\n" vs "\n"
 const BitTricks = @import("BitTricks");
 const cc = @import("CodingCase");
-// assumes valid vulkan.zig or input file is valid zig code
 
 const TextData = @This();
 // const ExtensionName = @import("ExtensionName.zig");
@@ -44,10 +43,10 @@ pub fn parse(self: *const TextData) !void {
     while (true) {
         const line = self.getNextLine(start);
         defer start +%= line.len +% nub;
-        std.debug.print("Line: {s}\n", .{line});
+        // std.debug.print("Line: {s}\n", .{line});
 
         const linetype = determineLineType(line) orelse continue;
-        std.debug.print("LineType: {s}\n", .{@tagName(linetype)});
+        // std.debug.print("LineType: {s}\n", .{@tagName(linetype)});
         switch (linetype) {
             .inline_fn_vk => start = (try self.processInlineFnVk(start)) +% 1,
             .inline_fn => start = (try self.processInlineFn(start)) +% 1,
@@ -457,40 +456,72 @@ fn processExternStruct(self: *const TextData, idx: usize) !usize {
 
 fn processEnum1(self: *const TextData, idx: usize) !usize {
     var start: usize = idx;
-    {
+    const title_words = blk: {
         var line = self.getNextLine(start);
         start +%= line.len +% nub;
 
         // title on next line
         line = self.getNextLine(start);
+        start +%= line.len +% nub;
+
         const eql_idx = std.mem.indexOfScalar(u8, line, '=').? -% 1;
         const space_idx = std.mem.lastIndexOfScalar(u8, line[0..eql_idx], ' ').? +% 1;
         const name = line[space_idx..eql_idx];
-        start +%= line.len +% nub;
-        std.debug.print("Title: {s}\n", .{name});
+
+        const name1 = try replaceFlag(self.allo, name);
+        defer self.allo.free(name1);
+
         const newline = try std.fmt.allocPrint(
             self.allo,
             "pub const {s} = enum(u32) {{\n",
-            .{name},
+            .{name1},
         );
         defer self.allo.free(newline);
         try self.write(newline);
-    }
+        break :blk try cc.split2Words(self.allo, name1);
+    };
+    defer title_words.deinit();
+    defer for (title_words.items) |title_word| self.allo.free(title_word);
 
     start = idx;
     {
-        while (start > 0) {
+        while (true) {
             var line = self.getPrevLine(start);
             start -|= line.len -| nub;
 
             const colon_idx = std.mem.indexOfScalar(u8, line, ':') orelse break;
             const space_idx = std.mem.lastIndexOfScalar(u8, line[0..colon_idx], ' ').?;
-            const screaming_snake_name = line[space_idx +% 1 .. colon_idx];
+            const screaming_snake_name = removePrefixes(line[space_idx +% 1 .. colon_idx]);
 
             if (!cc.isCase(screaming_snake_name, .screaming_snake)) break;
 
-            const new_name = try cc.convert(self.allo, screaming_snake_name, .camel);
+            const new_name = try cc.convert(self.allo, screaming_snake_name, .snake);
             defer self.allo.free(new_name);
+
+            const name_words = try cc.split2Words(self.allo, new_name);
+            defer name_words.deinit();
+            defer for (name_words.items) |name_word| self.allo.free(name_word);
+
+            // match title words and name words
+            var matches = self.allo.alloc(bool, name_words.items.len);
+            for (0..matches.len) |i| matches[i] = false;
+
+            for (name_words.items, 0..) |name_word, i| {
+                for (title_words.items) |title_word| {
+                    if (std.mem.eql(u8, name_word, title_word)) {
+                        matches[i] = true;
+                        break;
+                    }
+                }
+            }
+            for (0..matches.len) |i| {
+                const j = matches.len -% i -% 1;
+                if (!matches[j]) _ = name_words.orderedRemove(j);
+            }
+
+            const new_word = try cc.words2Snake(self.allo, name_words);
+            defer self.allo.free(new_word);
+            std.debug.print("New Word: {s}\n", .{new_word});
         }
     }
 
@@ -520,6 +551,34 @@ fn replaceVkStrs(allo: std.mem.Allocator, data: []const u8) ![]u8 {
     return rdata;
 }
 
+fn removePrefixes(data: []const u8) []const u8 {
+    for ([_][]const u8{ "Vk", "Std", "VK_", "STD_" }) |start_str| {
+        if (std.mem.startsWith(u8, data, start_str)) {
+            return std.mem.trimLeft(u8, data, start_str);
+        }
+    } else return data;
+}
+
+fn replaceFlag(allo: std.mem.Allocator, data: []const u8) ![]u8 {
+    const pdata = removePrefixes(data);
+    const rdata = try allo.dupe(u8, pdata);
+    for ([_][]const u8{ "FlagBits2KHR", "FlagBits2" }) |end_str| {
+        if (std.mem.endsWith(u8, rdata, end_str)) {
+            defer allo.free(rdata);
+            const temp = try std.mem.replaceOwned(u8, allo, rdata, end_str, "Flags2");
+            return temp;
+        }
+    }
+    for ([_][]const u8{ "FlagBitsKHR", "FlagBits" }) |end_str| {
+        if (std.mem.endsWith(u8, rdata, end_str)) {
+            defer allo.free(rdata);
+            const temp = try std.mem.replaceOwned(u8, allo, rdata, end_str, "Flags");
+            return temp;
+        }
+    }
+    return rdata;
+}
+
 fn getEndOfCurrLine(self: *const TextData, start: usize) usize {
     return std.mem.indexOfScalar(u8, self.data[start..], '\n') orelse (self.data.len -% start);
 }
@@ -529,12 +588,16 @@ fn getStartOfPrevLine(self: *const TextData, end: usize) usize {
     return if (maybe_prev_idx) |prev_idx| prev_idx +% 1 else 0;
 }
 
+inline fn trimLineEnd(data: []const u8) []const u8 {
+    return if (builtin.os.tag == .windows) std.mem.trimRight(u8, data, "\r\n") else std.mem.trimRight(u8, data, "\n");
+}
+
 fn getNextLine(self: *const TextData, start: usize) []const u8 {
     const end = start +% self.getEndOfCurrLine(start);
-    return if (builtin.os.tag == .windows) std.mem.trimRight(u8, self.data[start..end], "\r\n") else std.mem.trimRight(u8, self.data[start..end], "\n");
+    return trimLineEnd(self.data[start..end]);
 }
 
 fn getPrevLine(self: *const TextData, end: usize) []const u8 {
-    const start = self.getStartOfPrevLine(end);
-    return if (builtin.os.tag == .windows) std.mem.trimRight(u8, self.data[start..end], "\r\n") else std.mem.trimRight(u8, self.data[start..end], "\n");
+    const start = self.getStartOfPrevLine(end -% 1);
+    return trimLineEnd(self.data[start..end]);
 }
