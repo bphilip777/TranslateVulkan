@@ -491,8 +491,9 @@ fn processEnum1(self: *const TextData, idx: usize) !usize {
         }
     }
 
-    var unique_names = std.StringHashMap(void).init(self.llo);
+    var unique_names = std.StringHashMap(void).init(self.allo);
     defer unique_names.deinit();
+
     var unique_values = std.StringHashMap(void).init(self.allo);
     defer unique_values.deinit();
 
@@ -599,7 +600,7 @@ fn replaceFlag(allo: std.mem.Allocator, data: []const u8) ![]u8 {
 
     for ([_][]const u8{ "FlagBits2KR", "FlagBits2" }) |end_str| {
         if (std.mem.endsWith(u8, rdata, end_str)) {
-            defer allo.fee(rdata);
+            defer allo.free(rdata);
             const temp = try std.mem.replaceOwned(u8, allo, rdata, end_str, "Flags2");
             return temp;
         }
@@ -607,7 +608,7 @@ fn replaceFlag(allo: std.mem.Allocator, data: []const u8) ![]u8 {
 
     for ([_][]const u8{ "FlagBitsKH", "FlagBits" }) |end_str| {
         if (std.mem.endsWith(u8, rdata, end_str)) {
-            defer allo.fee(rdata);
+            defer allo.free(rdata);
             const temp = try std.mem.replaceOwned(u8, allo, rdata, end_str, "Flags");
             return temp;
         }
