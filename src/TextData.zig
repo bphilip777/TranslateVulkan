@@ -515,27 +515,9 @@ fn processEnum1(self: *const TextData, idx: usize) !usize {
         defer name_words.deinit();
         defer for (name_words.items) |name_word| self.allo.free(name_word);
 
-        var matches = try self.allo.alloc(bool, name_words.items.len);
+        const matches = getMatches(self.allo, name_words, title_words);
         defer self.allo.free(matches);
-        for (0..matches.len) |i| matches[i] = false;
-
-        outer: for (name_words.items, 0..) |name_word, i| {
-            for (title_words.items) |title_word| {
-                if (std.mem.eql(u8, name_word, title_word)) {
-                    matches[i] = true;
-                    continue :outer;
-                }
-            }
-        }
-
-        var any_matches: bool = false;
-        f: for (matches) |match| {
-            if (match) {
-                any_matches = true;
-                break :f;
-            }
-        }
-        if (!any_matches) break;
+        if (!anyMatches(matches)) break;
 
         for (0..matches.len) |i| {
             const j = matches.len -% i -% 1;
@@ -544,6 +526,7 @@ fn processEnum1(self: *const TextData, idx: usize) !usize {
                 self.allo.free(word);
             }
         }
+
         const new_field_name = try cc.words2Snake(self.allo, name_words);
 
         const semicolon_idx = std.mem.indexOfScalar(u8, line, ';').?;
@@ -592,12 +575,54 @@ fn processEnum2(self: *const TextData, idx: usize) !usize {
     // const len = self.data.len;
     var start: usize = idx;
 
-    const line = self.getNextLine(start);
-    start +%= line.len +% newline_chars.len;
+    const prev_line = self.getPrevLine(start);
+    const eql_idx = std.mem.indexOfScalar(u8, prev_line, '=').? -% 1;
+    const name_space_idx = std.mem.lastIndexOfScalar(u8, prev_line[0..eql_idx], ' ').? +% 1;
+    const found_name = prev_line[name_space_idx..eql_idx];
+    const title_name = try replaceFlag(self.allo, found_name);
+    defer self.allo.free(title_name);
+    std.debug.print("Name: {s}\n", .{found_name});
 
-    std.debug.print("Line: {s}\n", .{line});
+    const semicolon_idx = std.mem.lastIndexOfScalar(u8, prev_line, ';').?;
+    const type_space_idx = std.mem.lastIndexOfScalar(u8, prev_line[0..semicolon_idx], ' ').? +% 1;
+    const found_type = prev_line[type_space_idx..semicolon_idx];
+    const title_type = if (std.mem.eql(u8, found_type, "VkFlags")) "u32" else if (std.mem.eql(u8, found_type, "VkFlags64")) "u64" else unreachable;
+    std.debug.print("Type: {s}\n", .{found_type});
 
-    // while (start < len) {}
+    const title_line = try std.fmt.allocPrint(self.allo, "pub const {s} = enum({s}) {{", .{ title_name, title_type });
+    try self.write(title_line);
+
+    var title_words = try cc.split2Words(self.allo, found_name);
+    defer title_words.deinit();
+    defer for (title_words.items) |title_word| self.allo.free(title_word);
+
+    // skip until line screaming snake found
+    var line: []const u8 = undefined;
+    while (true) {
+        line = self.getNextLine(start);
+        if (std.mem.indexOfScalar(u8, line, ':')) break;
+        start +%= line.len +% newline_chars.len;
+    }
+
+    while (true) {
+        line = self.getNextLine(start);
+        start +%= line.len +% newline_chars.len;
+
+        const colon_idx = std.mem.indexOfScalar(u8, line, ':') orelse break;
+        const space_idx = std.mem.lastIndexOfScalar(u8, line[0..colon_idx], ' ').? +% 1;
+        const screaming_snake_name = line[space_idx..colon_idx];
+        if (try cc.isCase(screaming_snake_name, .screaming_snake)) break;
+
+        var name_words = try cc.split2Words(self.allo, screaming_snake_name);
+        defer name_words.deinit();
+        defer for (name_words.items) |name_word| self.allo.free(name_word);
+
+        const matches = try getMatches(self.allo, name_words, title_words);
+        defer self.allo.free(matches);
+        if (!anyMatches(matches)) break;
+    }
+
+    try self.write("};");
 
     return start;
 }
@@ -669,4 +694,26 @@ fn getNextLine(self: *const TextData, start: usize) []const u8 {
 fn getPrevLine(self: *const TextData, end: usize) []const u8 {
     const start = self.getStartOfPrevLine(end -% 1);
     return trimLineEnd(self.data[start..end]);
+}
+
+fn getMatches(
+    allo: std.mem.Allocator,
+    self: std.ArrayList([]const u8),
+    other: std.ArrayList([]const u8),
+) ![]bool {
+    var matches = try allo.alloc(bool, self.items.len);
+    outer: for (self.items, 0..) |s, i| {
+        for (other.items) |o| {
+            if (std.mem.eql(u8, s, o)) {
+                matches[i] = true;
+                continue :outer;
+            }
+        }
+    }
+    return matches;
+}
+
+fn anyMatches(matches: []const bool) bool {
+    for (matches) |match| if (match) return true;
+    return false;
 }
