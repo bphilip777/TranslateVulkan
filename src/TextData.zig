@@ -528,6 +528,15 @@ fn processEnum1(self: *const TextData, idx: usize) !usize {
             }
         }
 
+        var any_matches: bool = false;
+        f: for (matches) |match| {
+            if (match) {
+                any_matches = true;
+                break :f;
+            }
+        }
+        if (!any_matches) break;
+
         for (0..matches.len) |i| {
             const j = matches.len -% i -% 1;
             if (matches[j]) {
@@ -540,6 +549,21 @@ fn processEnum1(self: *const TextData, idx: usize) !usize {
         const semicolon_idx = std.mem.indexOfScalar(u8, line, ';').?;
         const space_idx_1 = std.mem.lastIndexOfScalar(u8, line[0..semicolon_idx], ' ').?;
         const new_field_value = try self.allo.dupe(u8, line[space_idx_1 + 1 .. semicolon_idx]);
+
+        if (unique_names.get(new_field_name)) |_| {
+            self.allo.free(new_field_name);
+            continue;
+        } else {
+            try unique_names.put(new_field_name, {});
+        }
+
+        if (unique_values.get(new_field_value)) |_| {
+            self.allo.free(new_field_name);
+            self.allo.free(new_field_value);
+            continue;
+        } else {
+            try unique_values.put(new_field_value, {});
+        }
 
         try fields.append(.{
             .name = new_field_name,
@@ -558,15 +582,22 @@ fn processEnum1(self: *const TextData, idx: usize) !usize {
         defer self.allo.free(field_line);
         try self.write(field_line);
     }
+    // try self.write("_,"); // converts enum to non-exhaustive
     try self.write("};");
 
     return idx +% next_line.len +% newline_chars.len;
 }
 
 fn processEnum2(self: *const TextData, idx: usize) !usize {
+    // const len = self.data.len;
     var start: usize = idx;
+
     const line = self.getNextLine(start);
     start +%= line.len +% newline_chars.len;
+
+    std.debug.print("Line: {s}\n", .{line});
+
+    // while (start < len) {}
 
     return start;
 }

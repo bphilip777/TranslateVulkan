@@ -50,8 +50,8 @@ pub fn main() !void {
     // const filepath = "opaque.zig";
     // const filepath = "extern_struct_vk.zig";
     // const filepath = "extern_struct.zig";
-    const filepath = "enum1.zig";
-    // const filepath = "enum2.zig";
+    // const filepath = "enum1.zig";
+    const filepath = "enum2.zig";
 
     const src_path = src_dir.* ++ filepath.*;
     const dst_path = dst_dir.* ++ filepath.*;
