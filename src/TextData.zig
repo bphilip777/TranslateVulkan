@@ -469,7 +469,6 @@ fn processEnum1(self: *const TextData, idx: usize) !usize {
     const title_name = try replaceFlag(self.allo, found_name);
     defer self.allo.free(title_name);
 
-    // std.debug.print("Title: {s}\nType: {s}\n", .{ found_name, found_type });
     const title_line = try std.fmt.allocPrint(
         self.allo,
         "pub const {s} = enum({s}) {{",
@@ -493,9 +492,13 @@ fn processEnum1(self: *const TextData, idx: usize) !usize {
 
     var unique_names = std.StringHashMap(void).init(self.allo);
     defer unique_names.deinit();
+    var kit = unique_names.keyIterator();
+    while (kit.next()) |key| self.allo.free(key.*);
 
     var unique_values = std.StringHashMap(void).init(self.allo);
     defer unique_values.deinit();
+    kit = unique_values.keyIterator();
+    while (kit.next()) |key| self.allo.free(key.*);
 
     var curr = idx -% prev_line.len -% newline_chars.len;
     while (curr > 0) {
@@ -515,16 +518,15 @@ fn processEnum1(self: *const TextData, idx: usize) !usize {
         defer name_words.deinit();
         defer for (name_words.items) |name_word| self.allo.free(name_word);
 
-        const matches = getMatches(self.allo, name_words, title_words);
+        const matches = try getMatches(self.allo, name_words, title_words);
         defer self.allo.free(matches);
         if (!anyMatches(matches)) break;
 
         for (0..matches.len) |i| {
             const j = matches.len -% i -% 1;
-            if (matches[j]) {
-                const word = name_words.orderedRemove(j);
-                self.allo.free(word);
-            }
+            if (!matches[j]) continue;
+            const word = name_words.orderedRemove(j);
+            self.allo.free(word);
         }
 
         const new_field_name = try cc.words2Snake(self.allo, name_words);
@@ -565,14 +567,12 @@ fn processEnum1(self: *const TextData, idx: usize) !usize {
         defer self.allo.free(field_line);
         try self.write(field_line);
     }
-    // try self.write("_,"); // converts enum to non-exhaustive
     try self.write("};");
 
     return idx +% next_line.len +% newline_chars.len;
 }
 
 fn processEnum2(self: *const TextData, idx: usize) !usize {
-    // const len = self.data.len;
     var start: usize = idx;
 
     const prev_line = self.getPrevLine(start);
@@ -581,26 +581,36 @@ fn processEnum2(self: *const TextData, idx: usize) !usize {
     const found_name = prev_line[name_space_idx..eql_idx];
     const title_name = try replaceFlag(self.allo, found_name);
     defer self.allo.free(title_name);
-    std.debug.print("Name: {s}\n", .{found_name});
 
     const semicolon_idx = std.mem.lastIndexOfScalar(u8, prev_line, ';').?;
     const type_space_idx = std.mem.lastIndexOfScalar(u8, prev_line[0..semicolon_idx], ' ').? +% 1;
     const found_type = prev_line[type_space_idx..semicolon_idx];
     const title_type = if (std.mem.eql(u8, found_type, "VkFlags")) "u32" else if (std.mem.eql(u8, found_type, "VkFlags64")) "u64" else unreachable;
-    std.debug.print("Type: {s}\n", .{found_type});
 
     const title_line = try std.fmt.allocPrint(self.allo, "pub const {s} = enum({s}) {{", .{ title_name, title_type });
+    defer self.allo.free(title_line);
     try self.write(title_line);
 
     var title_words = try cc.split2Words(self.allo, found_name);
     defer title_words.deinit();
+    for (title_words.items, 0..) |*title_word, i| {
+        const word = title_word.*;
+        if (word.len > 1 and std.ascii.isDigit(word[word.len -% 1])) {
+            const new_digit = try self.allo.dupe(u8, word[word.len -% 1 .. word.len]);
+            try title_words.insert(i +% 1, new_digit);
+
+            const new_word = try self.allo.alloc(u8, word.len -% 1);
+            @memcpy(new_word, word[0 .. word.len -% 1]);
+            self.allo.free(title_word.*);
+            title_word.* = new_word;
+        }
+    }
     defer for (title_words.items) |title_word| self.allo.free(title_word);
 
-    // skip until line screaming snake found
     var line: []const u8 = undefined;
     while (true) {
         line = self.getNextLine(start);
-        if (std.mem.indexOfScalar(u8, line, ':')) break;
+        if (std.mem.indexOfScalar(u8, line, ':') != null) break;
         start +%= line.len +% newline_chars.len;
     }
 
@@ -610,8 +620,9 @@ fn processEnum2(self: *const TextData, idx: usize) !usize {
 
         const colon_idx = std.mem.indexOfScalar(u8, line, ':') orelse break;
         const space_idx = std.mem.lastIndexOfScalar(u8, line[0..colon_idx], ' ').? +% 1;
-        const screaming_snake_name = line[space_idx..colon_idx];
-        if (try cc.isCase(screaming_snake_name, .screaming_snake)) break;
+        const screaming_snake_name = std.mem.trim(u8, line[space_idx..colon_idx], " ");
+
+        if (!cc.isCase(screaming_snake_name, .screaming_snake)) break;
 
         var name_words = try cc.split2Words(self.allo, screaming_snake_name);
         defer name_words.deinit();
@@ -620,8 +631,17 @@ fn processEnum2(self: *const TextData, idx: usize) !usize {
         const matches = try getMatches(self.allo, name_words, title_words);
         defer self.allo.free(matches);
         if (!anyMatches(matches)) break;
-    }
 
+        for (0..matches.len) |i| {
+            const j = matches.len -% i -% 1;
+            if (!matches[j]) continue;
+            const word = name_words.orderedRemove(j);
+            self.allo.free(word);
+        }
+
+        const new_name = if (name_words.items.len > 0) try cc.words2Snake(self.allo, name_words) else try self.allo.dupe(u8, "_base");
+        defer self.allo.free(new_name);
+    }
     try self.write("};");
 
     return start;
@@ -716,4 +736,59 @@ fn getMatches(
 fn anyMatches(matches: []const bool) bool {
     for (matches) |match| if (match) return true;
     return false;
+}
+
+fn isKeyword(word: []const u8) bool {
+    const map = std.StaticStringMap(void).initComptime(.{
+        .{ "addrspace", {} },
+        .{ "align", {} },
+        .{ "allowzero", {} },
+        .{ "and", {} },
+        .{ "anyframe", {} },
+        .{ "anytype", {} },
+        .{ "asm", {} },
+        .{ "async", {} },
+        .{ "await", {} },
+        .{ "break", {} },
+        .{ "callconv", {} },
+        .{ "catch", {} },
+        .{ "comptime", {} },
+        .{ "const", {} },
+        .{ "continue", {} },
+        .{ "defer", {} },
+        .{ "else", {} },
+        .{ "enum", {} },
+        .{ "errdefer", {} },
+        .{ "error", {} },
+        .{ "export", {} },
+        .{ "extern", {} },
+        .{ "fn", {} },
+        .{ "for", {} },
+        .{ "if", {} },
+        .{ "inline", {} },
+        .{ "linksection", {} },
+        .{ "noalias", {} },
+        .{ "noinline", {} },
+        .{ "nosuspend", {} },
+        .{ "opaque", {} },
+        .{ "or", {} },
+        .{ "orelse", {} },
+        .{ "packed", {} },
+        .{ "pub", {} },
+        .{ "resume", {} },
+        .{ "return", {} },
+        .{ "struct", {} },
+        .{ "suspend", {} },
+        .{ "switch", {} },
+        .{ "test", {} },
+        .{ "threadlocal", {} },
+        .{ "try", {} },
+        .{ "union", {} },
+        .{ "unreachable", {} },
+        .{ "usingnamespace", {} },
+        .{ "var", {} },
+        .{ "volatile", {} },
+        .{ "while", {} },
+    });
+    return map.has(word);
 }
