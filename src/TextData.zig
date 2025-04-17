@@ -424,7 +424,7 @@ fn processExternStructVk(self: *const TextData, idx: usize) !usize {
 
 fn processExternStruct(self: *const TextData, idx: usize) !usize {
     var start = idx;
-    {
+    { // title
         const line = self.getNextLine(start);
         start +%= line.len +% nub;
         try self.write(line);
@@ -433,56 +433,38 @@ fn processExternStruct(self: *const TextData, idx: usize) !usize {
     while (true) {
         const line = self.getNextLine(start);
         start +%= line.len +% nub;
+
+        const maybe_colon_idx = std.mem.indexOfScalar(u8, line, ':');
+        if (maybe_colon_idx) |colon_idx| {
+            const start_idx = std.mem.lastIndexOfScalar(u8, line[0..colon_idx], ' ').?;
+            const name = line[start_idx +% 1 .. colon_idx];
+
+            const name1 = cc.convert(self.allo, name, .snake) catch {
+                try self.write(line);
+                continue;
+            };
+            defer self.allo.free(name1);
+
+            const newline = try std.mem.replaceOwned(u8, self.allo, line, name, name1);
+            defer self.allo.free(newline);
+            try self.write(newline);
+            continue;
+        }
+
+        try self.write(line);
+        if (std.mem.eql(u8, line, "};")) break;
     }
 
     return start;
 }
 
-// fn processEnum1(self: *const TextData, start: u32) !u32 {
-//     std.debug.print("Inside Enum 1\n", .{});
-//
-//     const end = self.getNextNewLine(start);
-// const line = self.getNextLine(start, end);
-//     const data = self.data[start..end];
-//     std.debug.print("Data: {s}\n", .{data});
-//
-//     // extract title
-//     const next_start = end +% 1;
-//     const next_end = self.getNextNewLine(next_start);
-//     const next_data = self.data[next_start..next_end];
-//     std.debug.print("Next Data: {s}\n", .{next_data});
-//
-//     const curr_end: u32 = start -% 1;
-//     while (true) {
-//         const prev_start = self.getStartOfPrevLine(curr_end);
-//         const line =
-//         std.debug.print("Line: {s}\n", .{line});
-//
-//         const semicolon_idx = std.mem.indexOfScalar(u8, line, ':') orelse break;
-//         const screaming_snake_name = line[0..semicolon_idx];
-//         if (!cc.isCase(screaming_snake_name, .screaming_snake)) break;
-//         std.debug.print("Screaming Snake Name: {s}\n", .{screaming_snake_name});
-//
-//         const snake_name = try self.allo.alloc(u8, screaming_snake_name.len);
-//         defer self.allo.free(snake_name);
-//         _ = try cc.convert(snake_name, screaming_snake_name, .snake, .screaming_snake);
-//         std.debug.print("Snake Name: {s}\n", .{snake_name});
-//
-//         break;
-//     }
-//
-//     // var curr: u32 = start;
-//     // while (true) {
-//     //     const prev_start: u32 = @truncate(std.mem.lastIndexOf(u8, data[0..curr], "pub const") orelse break);
-//     //     const prev_end: u32 = @truncate(std.mem.lastIndexOfScalar(u8, data[0..curr], ';') orelse break);
-//     //     if (prev_start >= prev_end) break;
-//     //     std.debug.print("{s}\n", .{self.data[prev_start..prev_end]});
-//     //     curr = prev_start;
-//     // }
-//
-//     try self.write(data);
-//     return len;
-// }
+fn processEnum1(self: *const TextData, idx: usize) !usize {
+    var start: usize = idx;
+    const line = self.getNextLine(start);
+    start +%= line.len +% nub;
+
+    return start;
+}
 
 // fn processEnum2(self: *const TextData, start: u32) !u32 {
 //     const end = self.getEndOfCurrLine(start);
