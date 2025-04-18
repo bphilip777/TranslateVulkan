@@ -496,17 +496,9 @@ fn processEnum1(self: *const TextData, idx: usize) !usize {
 
     var unique_names = std.StringHashMap(void).init(self.allo);
     defer unique_names.deinit();
-    defer {
-        var kit = unique_names.keyIterator();
-        while (kit.next()) |key| self.allo.free(key.*);
-    }
 
     var unique_values = std.StringHashMap(void).init(self.allo);
     defer unique_values.deinit();
-    defer {
-        var kit = unique_values.keyIterator();
-        while (kit.next()) |key| self.allo.free(key.*);
-    }
 
     var curr = idx -% prev_line.len -% newline_chars.len;
     outer: while (curr > 0) {
@@ -562,17 +554,16 @@ fn processEnum1(self: *const TextData, idx: usize) !usize {
             self.allo.free(new_field_name);
             self.allo.free(new_field_value);
             continue;
-        } else {
-            try unique_names.put(new_field_name, {});
         }
 
         if (unique_values.get(new_field_value)) |_| {
             self.allo.free(new_field_name);
             self.allo.free(new_field_value);
             continue;
-        } else {
-            try unique_values.put(new_field_value, {});
         }
+
+        try unique_names.put(new_field_name, {});
+        try unique_values.put(new_field_value, {});
 
         try fields.append(.{
             .name = new_field_name,
@@ -652,17 +643,9 @@ fn processEnum2(self: *const TextData, idx: usize) !usize {
 
     var unique_names = std.StringHashMap(void).init(self.allo);
     defer unique_names.deinit();
-    defer {
-        var kit = unique_names.keyIterator();
-        while (kit.next()) |key| self.allo.free(key.*);
-    }
 
     var unique_values = std.StringHashMap(void).init(self.allo);
     defer unique_values.deinit();
-    defer {
-        var kit = unique_values.keyIterator();
-        defer while (kit.next()) |key| self.allo.free(key.*);
-    }
 
     while (true) {
         line = self.getNextLine(start);
@@ -711,26 +694,33 @@ fn processEnum2(self: *const TextData, idx: usize) !usize {
             break :blk try self.allo.dupe(u8, line[value_space_idx..semicolon_idx]);
         };
 
-        if (unique_names.get(new_field_name) != null) {
+        if (unique_names.get(new_field_name)) |_| {
             self.allo.free(new_field_name);
             self.allo.free(new_field_value);
             continue;
-        } else {
-            try unique_names.put(new_field_name, {});
         }
 
-        if (unique_values.get(new_field_value) != null) {
+        if (unique_values.get(new_field_value)) |_| {
             self.allo.free(new_field_name);
             self.allo.free(new_field_value);
             continue;
-        } else {
-            try unique_values.put(new_field_value, {});
         }
-        try fields.append(.{ .name = new_field_name, .value = new_field_value });
+
+        try unique_names.put(new_field_name, {});
+        try unique_values.put(new_field_value, {});
+
+        try fields.append(.{
+            .name = new_field_name,
+            .value = new_field_value,
+        });
     }
 
     for (fields.items) |field| {
-        const newline = try std.fmt.allocPrint(self.allo, "{s} = {s},", .{ field.name, field.value });
+        const newline = try std.fmt.allocPrint(
+            self.allo,
+            "{s} = {s},",
+            .{ field.name, field.value },
+        );
         defer self.allo.free(newline);
         try self.write(newline);
     }
