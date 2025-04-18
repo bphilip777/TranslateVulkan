@@ -25,7 +25,9 @@ pub fn main() !void {
     // const filepath = "enum1.zig";
     // const filepath = "enum2.zig";
     // const filepath = "extension_name.zig";
-    const filepath = "spec_version.zig";
+    // const filepath = "spec_version.zig";
+    const filepath = "type_name.zig";
+    // const filepath = "type.zig";
 
     const src_path = src_dir.* ++ filepath.*;
     const dst_path = dst_dir.* ++ filepath.*;

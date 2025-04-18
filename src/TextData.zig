@@ -209,10 +209,17 @@ fn isSkip(line: []const u8) bool {
 }
 
 fn isTypeName(line: []const u8) bool {
-    const eql_idx = std.mem.indexOfScalar(u8, line, '=').?;
-    const name = line[0..eql_idx];
-    const semicolon_idx = std.mem.lastIndexOfScalar(u8, line, ';').?;
-    const value = line[eql_idx +% 1 .. semicolon_idx];
+    const name = blk: {
+        const space_idx = std.mem.indexOfScalar(u8, line, ' ').?;
+        break :blk line[0..space_idx];
+    };
+
+    const value = blk: {
+        const eql_idx = std.mem.indexOfScalar(u8, line, '=').? +% 2;
+        const semicolon_idx = std.mem.lastIndexOfScalar(u8, line, ';').?;
+        break :blk line[eql_idx..semicolon_idx];
+    };
+
     return cc.isCase(name, .screaming_snake) and std.mem.startsWith(u8, value, "@as(");
 }
 
@@ -267,9 +274,11 @@ fn isEnum2(line: []const u8) bool {
 }
 
 fn isType(line: []const u8) bool {
-    const types = [_][]const u8{ "u32;", "u64;" };
-    for (types) |t| if (std.mem.endsWith(u8, line, t)) return true;
-    return false;
+    std.debug.print("Line: {s}\n", .{line});
+    const types = [_][]const u8{ "u32", "u64", "i32", "i64" };
+    for (types) |t| {
+        if (std.mem.endsWith(u8, line, t)) return true;
+    } else return false;
 }
 
 fn processInlineFnVk(self: *const TextData, idx: usize) !usize {
@@ -399,29 +408,34 @@ fn processFn(self: *const TextData, idx: usize) !usize {
 fn processTypeName(self: *TextData, idx: usize) !void {
     const line = self.getPrevLine(idx);
 
-    const screaming_snake_name = blk: {
+    const snake_name = blk: {
         const eql_idx = std.mem.indexOfScalar(u8, line, '=').? -% 1;
         const space_idx = std.mem.lastIndexOfScalar(u8, line[0..eql_idx], ' ').? +% 1;
         const name = line[space_idx..eql_idx];
-        break :blk try self.allo.dupe(u8, name);
+        break :blk try cc.convert(self.allo, name, .snake);
     };
-    defer self.allo.free(screaming_snake_name);
-
-    const tss_name = try replaceVkStrs(self.allo, screaming_snake_name);
-    defer self.allo.free(tss_name);
-
-    const snake_name = try cc.convert(self.allo, tss_name, .snake);
     defer self.allo.free(snake_name);
+
+    const trim_vk_prefix = try replaceVkStrs(self.allo, snake_name);
+    defer self.allo.free(trim_vk_prefix);
+    // std.debug.print("Trim Prefix: {s}\n", .{trim_vk_prefix});
 
     const type_name = blk: {
         const open_paren_idx = std.mem.lastIndexOfScalar(u8, line, '(').? +% 1;
         const comma_idx = std.mem.lastIndexOfScalar(u8, line, ',').?;
         const type_name = line[open_paren_idx..comma_idx];
-        break :blk try self.allo.dupe(u8, type_name);
+        const type_name2 = if (std.mem.eql(u8, type_name, "c_uint")) "u32" else if (std.mem.eql(u8, type_name, "c_int")) "i32" else unreachable;
+        break :blk try self.allo.dupe(u8, type_name2);
     };
     defer self.allo.free(type_name);
 
-    const new_field_name = try std.fmt.allocPrint(self.allo, "{s}: {s}", .{ snake_name, type_name });
+    const new_field_name = try std.fmt.allocPrint(
+        self.allo,
+        "{s}: {s}",
+        .{ trim_vk_prefix, type_name },
+    );
+    // defer self.allo.free(new_field_name);
+    // std.debug.print("New Field Name: {s}\n", .{new_field_name});
 
     const new_field_value = blk: {
         const close_paren_idx = std.mem.lastIndexOfScalar(u8, line, ')').?;
@@ -429,6 +443,8 @@ fn processTypeName(self: *TextData, idx: usize) !void {
         const value = line[space_idx..close_paren_idx];
         break :blk try self.allo.dupe(u8, value);
     };
+    // defer self.allo.free(new_field_value);
+    // std.debug.print("New Field Value: {s}\n", .{new_field_value});
 
     try self.type_names.append(.{
         .name = new_field_name,
@@ -1001,8 +1017,8 @@ inline fn write(self: *const TextData, line: []const u8) !void {
 fn replaceVkStrs(allo: std.mem.Allocator, data: []const u8) ![]u8 {
     var rdata = try allo.dupe(u8, data);
     for (
-        [_][]const u8{ "VK_KHR_", "vk_khr_", "vk", "_vk", "]Vk", " Vk" },
-        [_][]const u8{ "", "", " ", "_", "]", " " },
+        [_][]const u8{ "VK_KHR_", "vk_khr_", "vk_", "vk", "_vk", "]Vk", " Vk" },
+        [_][]const u8{ "", "", "", " ", "_", "]", " " },
     ) |m_str, r_str| {
         if (std.mem.indexOf(u8, rdata, m_str)) |_| {
             const temp = try std.mem.replaceOwned(u8, allo, rdata, m_str, r_str);
