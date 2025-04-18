@@ -5,13 +5,16 @@ const newline_chars = if (builtin.os.tag == .windows) "\r\n" else "\n";
 
 const BitTricks = @import("BitTricks");
 const cc = @import("CodingCase");
-const EnumField = @import("EnumField.zig");
+const NameValue = @import("NameValue.zig");
 
 const TextData = @This();
 
 allo: std.mem.Allocator,
 data: []const u8,
 wfile: std.fs.File,
+
+extension_names: std.ArrayList(NameValue),
+spec_versions: std.ArrayList(NameValue),
 
 pub fn init(
     allo: std.mem.Allocator,
@@ -31,12 +34,22 @@ pub fn init(
         .allo = allo,
         .wfile = wfile,
         .data = data,
+        .extension_names = try std.ArrayList(NameValue).init(allo),
+        .spec_versions = try std.ArrayList(NameValue).init(allo),
     };
 }
 
 pub fn deinit(self: *TextData) void {
     self.wfile.close();
     self.allo.free(self.data);
+    for (self.extension_names.items) |en| {
+        self.allo.free(en.name);
+        self.allo.free(en.value);
+    }
+    for (self.spec_versions.items) |sv| {
+        self.allo.free(sv.name);
+        self.allo.free(sv.value);
+    }
 }
 
 pub fn parse(self: *const TextData) !void {
@@ -81,6 +94,9 @@ const LineType = enum {
     extern_const,
     export_var,
     @"fn",
+
+    extension_name,
+    spec_version,
     pfn,
     import,
     @"opaque",
@@ -108,6 +124,8 @@ fn determineLineType(line: []const u8) ?LineType {
 
     if (!std.mem.startsWith(u8, line1, strs[1])) return null;
     const line2 = line1[strs[1].len +% 1 .. line1.len];
+    if (isExtensionName(line2)) return .extension_name;
+    if (isSpecVersion(line2)) return .spec_version;
     if (isPFN(line2)) return .pfn;
     if (isImport(line2)) return .import;
     if (isOpaque(line2)) return .@"opaque";
@@ -155,6 +173,18 @@ fn isExportVar(line: []const u8) bool {
 fn isSkip(line: []const u8) bool {
     const eql_sign = std.mem.indexOfScalar(u8, line, ':') orelse return false;
     return cc.isCase(line[0..eql_sign], .screaming_snake) and std.mem.startsWith(u8, line, "VK_");
+}
+
+fn isExtensionName(line: []const u8) bool {
+    const space_idx = std.mem.indexOfScalar(u8, line, ' ').?;
+    const name = line[0..space_idx];
+    return std.mem.endsWith(u8, name, "_EXTENSION_NAME");
+}
+
+fn isSpecVersion(line: []const u8) bool {
+    const space_idx = std.mem.indexOfScalar(u8, line, ' ').?;
+    const name = line[0..space_idx];
+    return std.mem.endsWith(u8, name, "_SPEC_VERSION");
 }
 
 fn isPFN(line: []const u8) bool {
@@ -323,6 +353,89 @@ fn processFn(self: *const TextData, idx: usize) !usize {
     return start;
 }
 
+fn processExtensionNames(self: *TextData, idx: usize) !usize {
+    var start: usize = idx;
+    const line = self.getNextLine(start);
+    start +%= line.len +% newline_chars.len;
+
+    // pub const VK_KHR_SURFACE_EXTENSION_NAME = "VK_KHR_surface";
+    const screaming_snake_name = blk: {
+        const eql_idx = std.mem.indexOfScalar(u8, line, '=').? -% 1;
+        const space_idx = std.mem.lastIndexOfScalar(u8, line[0..eql_idx], ' ').? +% 1;
+        break :blk try self.allo.dupe(u8, line[space_idx..eql_idx]);
+    };
+    defer self.allo.free(screaming_snake_name);
+
+    const tss_name = std.mem.trimRight(u8, screaming_snake_name, "_EXTENSION_NAME");
+    const new_field_name = try cc.convert(self.allo, tss_name, .snake);
+
+    const new_field_value = blk: {
+        const semicolon_idx = std.mem.lastIndexOfScalar(u8, line, ';').?;
+        const space_idx = std.mem.lastIndexOfScalar(u8, line[0..semicolon_idx], ' ').? +% 1;
+        break :blk try self.allo.dupe(u8, line[space_idx..semicolon_idx]);
+    };
+
+    try self.extension_names.append(.{
+        .name = new_field_name,
+        .value = new_field_value,
+    });
+
+    return start;
+}
+
+fn writeExtensionNames(self: *const TextData) !void {
+    try self.write("pub const ExtensionNames = struct {");
+    for (self.extension_names.items) |en| {
+        const newline = try std.fmt.allocPrint(
+            self.allo,
+            "{s}:{s},",
+            .{ en.name, en.value },
+        );
+        defer self.allo.free(newline);
+        try self.write(newline);
+    }
+    try self.write("};");
+}
+
+fn processSpecVersion(self: *const TextData, idx: usize) !usize {
+    var start: usize = idx;
+    const line = self.getNextLine(start);
+    start +%= line.len +% newline_chars.len;
+
+    const screaming_snake_name = blk: {
+        const eql_idx = std.mem.indexOfScalar(u8, line, '=').? -% 1;
+        const space_idx = std.mem.lastIndexOfScalar(u8, line[0..eql_idx], ' ').? +% 1;
+        break :blk try self.allo.dupe(u8, line[space_idx..eql_idx]);
+    };
+    defer self.allo.free(screaming_snake_name);
+
+    const tss_name = std.mem.trimRight(u8, screaming_snake_name, "_SPEC_VERSION");
+    const new_field_name = try cc.convert(self.allo, tss_name, .snake);
+
+    const new_field_value = blk: {
+        const eql_idx = std.mem.indexOfScalar(u8, line, '=').? +% 2;
+        const semicolon_idx = std.mem.lastIndexOfScalar(u8, line, ';').?;
+        break :blk try self.allo.dupe(u8, line[eql_idx..semicolon_idx]);
+    };
+
+    try self.spec_versions.append(.{
+        .name = new_field_name,
+        .value = new_field_value,
+    });
+
+    return idx;
+}
+
+fn writeSpecVersion(self: *const TextData) void {
+    try self.write("pub const SpecVersion = struct {");
+    for (self.spec_versions.items) |sv| {
+        const newline = try std.fmt.allocPrint(self.allo, "{s}: {s},", .{ sv.name, sv.value });
+        defer self.allo.free(newline);
+        try self.write(newline);
+    }
+    try self.write("};");
+}
+
 fn processPFN(self: *const TextData, idx: usize) !usize {
     var start = idx;
     const line = self.getNextLine(start);
@@ -485,7 +598,7 @@ fn processEnum1(self: *const TextData, idx: usize) !usize {
     defer title_words.deinit();
     defer for (title_words.items) |title_word| self.allo.free(title_word);
 
-    var fields = std.ArrayList(EnumField).init(self.allo);
+    var fields = std.ArrayList(NameValue).init(self.allo);
     defer fields.deinit();
     defer {
         for (fields.items) |field| {
@@ -634,7 +747,7 @@ fn processEnum2(self: *const TextData, idx: usize) !usize {
         start +%= line.len +% newline_chars.len;
     }
 
-    var fields = std.ArrayList(EnumField).init(self.allo);
+    var fields = std.ArrayList(NameValue).init(self.allo);
     defer fields.deinit();
     defer for (fields.items) |field| {
         self.allo.free(field.name);
