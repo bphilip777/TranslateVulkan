@@ -101,6 +101,7 @@ pub fn parse(self: *TextData) !void {
             .extern_struct => start = (try self.processExternStruct(start)) +% 1,
             .enum1 => start = (try self.processEnum1(start)) +% 1,
             .enum2 => start = (try self.processEnum2(start)) +% 1,
+            .type => try self.processType(start),
 
             .skip => continue,
             else => {},
@@ -277,7 +278,9 @@ fn isType(line: []const u8) bool {
     std.debug.print("Line: {s}\n", .{line});
     const types = [_][]const u8{ "u32", "u64", "i32", "i64" };
     for (types) |t| {
-        if (std.mem.endsWith(u8, line, t)) return true;
+        const start = line.len -% t.len -% 1;
+        const end = line.len -% 1;
+        if (std.mem.endsWith(u8, line[start..end], t)) return true;
     } else return false;
 }
 
@@ -991,14 +994,21 @@ fn processType(self: *const TextData, idx: usize) !void {
 
     const name = try replaceVkStrs(self.allo, temp_name);
     defer self.allo.free(name);
+    std.debug.print("Name: {s}\n", .{name});
+
+    if (std.mem.eql(u8, name, "Bool32")) {
+        try self.write("pub const Bool32 = enum(u32) {\n false = 0,\n true = 1,\n };");
+        return;
+    }
 
     const value = blk: {
         const semicolon_idx = std.mem.lastIndexOfScalar(u8, line, ';').?;
-        const space_idx = std.mem.indexOfScalar(u8, line[0..semicolon_idx], ' ').? +% 1;
+        const space_idx = std.mem.lastIndexOfScalar(u8, line[0..semicolon_idx], ' ').? +% 1;
         const value = line[space_idx..semicolon_idx];
         break :blk try self.allo.dupe(u8, value);
     };
     defer self.allo.free(value);
+    std.debug.print("Value: {s}\n", .{value});
 
     const newline = try std.fmt.allocPrint(
         self.allo,
@@ -1017,8 +1027,8 @@ inline fn write(self: *const TextData, line: []const u8) !void {
 fn replaceVkStrs(allo: std.mem.Allocator, data: []const u8) ![]u8 {
     var rdata = try allo.dupe(u8, data);
     for (
-        [_][]const u8{ "VK_KHR_", "vk_khr_", "vk_", "vk", "_vk", "]Vk", " Vk" },
-        [_][]const u8{ "", "", "", " ", "_", "]", " " },
+        [_][]const u8{ "VK_KHR_", "vk_khr_", "Vk", "vk_", "vk", "_vk", "]Vk", " Vk" },
+        [_][]const u8{ "", "", "", "", " ", "_", "]", " " },
     ) |m_str, r_str| {
         if (std.mem.indexOf(u8, rdata, m_str)) |_| {
             const temp = try std.mem.replaceOwned(u8, allo, rdata, m_str, r_str);
