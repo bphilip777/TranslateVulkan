@@ -994,7 +994,7 @@ fn processType(self: *const TextData, idx: usize) !void {
 
     const name = try replaceVkStrs(self.allo, temp_name);
     defer self.allo.free(name);
-    std.debug.print("Name: {s}\n", .{name});
+    // std.debug.print("Name: {s}\n", .{name});
 
     if (std.mem.eql(u8, name, "Bool32")) {
         try self.write("pub const Bool32 = enum(u32) {\n false = 0,\n true = 1,\n };");
@@ -1008,7 +1008,7 @@ fn processType(self: *const TextData, idx: usize) !void {
         break :blk try self.allo.dupe(u8, value);
     };
     defer self.allo.free(value);
-    std.debug.print("Value: {s}\n", .{value});
+    // std.debug.print("Value: {s}\n", .{value});
 
     const newline = try std.fmt.allocPrint(
         self.allo,
