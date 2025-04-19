@@ -9,30 +9,50 @@ pub fn main() !void {
     const src_dir = "src/test/src/";
     const dst_dir = "src/test/dst/";
 
-    // const filepath = "inline_fn_vk.zig";
-    // const filepath = "inline_fn.zig";
-    // const filepath = "extern_fn_vk.zig";
-    // const filepath = "extern_fn.zig";
-    // const filepath = "extern_var.zig";
-    // const filepath = "extern_const.zig";
-    // const filepath = "export_var.zig";
-    // const filepath = "fn.zig";
-    // const filepath = "pfn.zig";
-    // const filepath = "import.zig";
-    // const filepath = "opaque.zig";
-    // const filepath = "extern_struct_vk.zig";
-    // const filepath = "extern_struct.zig";
-    // const filepath = "enum1.zig";
-    // const filepath = "enum2.zig";
-    // const filepath = "extension_name.zig";
-    // const filepath = "spec_version.zig";
-    // const filepath = "type_name.zig";
-    const filepath = "type.zig";
+    const filepath = "extern_var";
 
-    const src_path = src_dir.* ++ filepath.*;
-    const dst_path = dst_dir.* ++ filepath.*;
+    const ext = ".zig";
+    const src_path = try std.fmt.allocPrint(allo, "{s}{s}{s}", .{ src_dir, filepath, ext });
+    defer allo.free(src_path);
 
-    var text = try TextData.init(allo, &src_path, &dst_path);
+    const dst_path = try std.fmt.allocPrint(allo, "{s}{s}{s}", .{ dst_dir, filepath, ext });
+    defer allo.free(dst_path);
+
+    var text = try TextData.init(allo, src_path, dst_path);
     defer text.deinit();
     try text.parse();
+
+    // const filepaths = [_][]const u8{
+    //     "inline_fn_vk",
+    //     "inline_fn",
+    //     "extern_fn_vk",
+    //     "extern_fn",
+    //     "extern_var",
+    //     "extern_const",
+    //     "export_var",
+    //     "fn",
+    //     "pfn",
+    //     "import",
+    //     "opaque",
+    //     "extern_struct_vk",
+    //     "extern_struct",
+    //     "enum1",
+    //     "enum2",
+    //     "extension_name",
+    //     "spec_version",
+    //     "type_name",
+    //     "type",
+    // };
+    //
+    // for (filepaths) |filepath| {
+    //     const src_path = try std.fmt.allocPrint(allo, "{s}{s}{s}", .{ src_dir, filepath, ext });
+    //     defer allo.free(src_path);
+    //
+    //     const dst_path = try std.fmt.allocPrint(allo, "{s}{s}{s}", .{ dst_dir, filepath, ext });
+    //     defer allo.free(dst_path);
+    //
+    //     var text = try TextData.init(allo, src_path, dst_path);
+    //     defer text.deinit();
+    //     try text.parse();
+    // }
 }

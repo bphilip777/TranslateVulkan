@@ -84,24 +84,24 @@ pub fn parse(self: *TextData) !void {
             .inline_fn_vk => start = (try self.processInlineFnVk(start)) +% 1,
             .inline_fn => start = (try self.processInlineFn(start)) +% 1,
             .extern_fn_vk => start = (try self.processExternFnVk(start)) +% 1,
-            .extern_fn => start = (try self.processExternFn(start)) +% 1,
-            .extern_var => start = (try self.processExternVar(start)) +% 1,
-            .extern_const => start = (try self.processExternConst(start)) +% 1,
-            .export_var => start = (try self.processExportVar(start)) +% 1,
+            .extern_fn => try self.processExternFn(start),
+            .extern_var => try self.processExternVar(start),
+            .extern_const => try self.processExternConst(start),
+            .export_var => try self.processExportVar(start),
             .@"fn" => start = (try self.processFn(start)) +% 1,
 
-            .type_name => try self.processTypeName(start),
-            .extension_name => try self.processExtensionName(start),
-            .spec_version => try self.processSpecVersion(start),
-
-            .pfn => start = (try self.processPFN(start)) +% 1,
-            .import => start = (try self.processImport(start)) +% 1,
-            .@"opaque" => start = (try self.processOpaque(start)) +% 1,
-            .extern_struct_vk => start = (try self.processExternStructVk(start)) +% 1,
-            .extern_struct => start = (try self.processExternStruct(start)) +% 1,
-            .enum1 => start = (try self.processEnum1(start)) +% 1,
-            .enum2 => start = (try self.processEnum2(start)) +% 1,
-            .type => try self.processType(start),
+            // .type_name => try self.processTypeName(start),
+            // .extension_name => try self.processExtensionName(start),
+            // .spec_version => try self.processSpecVersion(start),
+            //
+            // .pfn => start = (try self.processPFN(start)) +% 1,
+            // .import => start = (try self.processImport(start)) +% 1,
+            // .@"opaque" => start = (try self.processOpaque(start)) +% 1,
+            // .extern_struct_vk => start = (try self.processExternStructVk(start)) +% 1,
+            // .extern_struct => start = (try self.processExternStruct(start)) +% 1,
+            // .enum1 => start = (try self.processEnum1(start)) +% 1,
+            // .enum2 => start = (try self.processEnum2(start)) +% 1,
+            // .type => try self.processType(start),
 
             .skip => continue,
             else => {},
@@ -109,9 +109,9 @@ pub fn parse(self: *TextData) !void {
         break;
     }
 
-    if (self.type_names.items.len > 0) try self.writeTypeNames();
-    if (self.extension_names.items.len > 0) try self.writeExtensionNames();
-    if (self.spec_versions.items.len > 0) try self.writeSpecVersions();
+    // if (self.type_names.items.len > 0) try self.writeTypeNames();
+    // if (self.extension_names.items.len > 0) try self.writeExtensionNames();
+    // if (self.spec_versions.items.len > 0) try self.writeSpecVersions();
 }
 
 const LineType = enum {
@@ -287,23 +287,22 @@ fn isType(line: []const u8) bool {
 fn processInlineFnVk(self: *const TextData, idx: usize) !usize {
     var start: usize = idx;
     {
-        const line = self.getNextLine(start);
-        start +%= line.len +% newline_chars.len;
+        const line = self.getPrevLine(start);
+        const fn_name = getFnName(line);
+        // std.debug.print("Fn Name: {s}\n", .{fn_name});
 
-        // get title
-        const title_end = std.mem.indexOfScalar(u8, line, '(').?;
-        const title_start = std.mem.lastIndexOfScalar(u8, line[0..title_end], ' ').?;
-        const old_title = line[title_start +% 1 .. title_end];
-        const title = old_title[3..];
+        const trim_fn_name = removeStrs(fn_name, &.{"VK_"}, &.{""});
+        // std.debug.print("Trim Fn Name: {s}\n", .{trim_fn_name});
 
-        // change title
-        const new_title = try cc.convert(self.allo, title, .camel);
-        defer self.allo.free(new_title);
+        const snake_fn_name = try cc.convert(self.allo, trim_fn_name, .camel);
+        defer self.allo.free(snake_fn_name);
+        // std.debug.print("Snake Fn Name: {s}\n", .{snake_fn_name});
 
         // write new title line
-        const new_line = try std.mem.replaceOwned(u8, self.allo, line, old_title, new_title);
-        defer self.allo.free(new_line);
-        try self.write(new_line);
+        const newline = try std.mem.replaceOwned(u8, self.allo, line, fn_name, snake_fn_name);
+        defer self.allo.free(newline);
+        try self.write(newline);
+        // std.debug.print("New Line: {s}\n", .{newline});
     }
 
     while (true) {
@@ -317,90 +316,84 @@ fn processInlineFnVk(self: *const TextData, idx: usize) !usize {
 }
 
 fn processInlineFn(self: *const TextData, idx: usize) !usize {
-    const len: usize = self.data.len;
     var start: usize = idx;
-    while (start < len) {
-        const line = self.getNextLine(start);
+    var line = self.getPrevLine(start);
+    // std.debug.print("Line: {s}", .{line});
+    try self.write(line);
+
+    while (true) {
+        line = self.getNextLine(start);
         start +%= line.len +% newline_chars.len;
         try self.write(line);
         if (std.mem.eql(u8, line, "}")) break;
     }
+
     return start;
 }
 
 fn processExternFnVk(self: *const TextData, idx: usize) !usize {
     var start = idx;
-    const line = self.getNextLine(start);
+    const line = self.getPrevLine(start);
+    // std.debug.print("Line: {s}\n", .{line});
     start +%= line.len +% newline_chars.len;
 
-    var rline = try replaceVkStrs(self.allo, line);
-    defer self.allo.free(rline);
-    const prefix = "pub extern fn ";
-    rline[prefix.len] = std.ascii.toLower(rline[prefix.len]);
+    const fn_name = getFnName(line);
+    // std.debug.print("Fn Name: {s}\n", .{fn_name});
 
-    // change case
-    var curr_idx = std.mem.indexOfScalar(u8, rline, '(').?;
-    while (true) {
-        const colon_idx = std.mem.indexOfScalar(u8, rline[curr_idx..], ':') orelse break;
-        curr_idx +%= colon_idx +% 1;
+    const trim_fn_name = removeStrs(fn_name, &.{"vk"}, &.{});
+    // std.debug.print("Trim Fn Name: {s}\n", .{trim_fn_name});
 
-        const prev_space_idx = std.mem.lastIndexOfScalar(u8, rline[0..curr_idx], ' ') orelse 0;
-        const prev_paren_idx = std.mem.lastIndexOfScalar(u8, rline[0..curr_idx], '(') orelse 0;
+    const camel_fn_name = try cc.convert(self.allo, trim_fn_name, .camel);
+    defer self.allo.free(camel_fn_name);
+    // std.debug.print("Camel Fn Name: {s}\n", .{camel_fn_name});
 
-        const max_idx = @max(prev_space_idx, prev_paren_idx) +% 1;
-        const old_str = rline[max_idx .. curr_idx -% 1];
-        const new_str = try cc.convert(self.allo, old_str, .snake);
-        defer self.allo.free(new_str);
+    const replace_fn_name = try std.mem.replaceOwned(u8, self.allo, line, fn_name, camel_fn_name);
+    defer self.allo.free(replace_fn_name);
+    // std.debug.print("Replace Fn Name: {s}\n", .{replace_fn_name});
 
-        const temp = try std.mem.replaceOwned(u8, self.allo, rline, old_str, new_str);
-        self.allo.free(rline);
-        rline = temp;
-    }
-    try self.write(rline);
+    const new_fn_line = try replaceVkStrs(self.allo, replace_fn_name);
+    defer self.allo.free(new_fn_line);
+    // std.debug.print("New Fn Line: {s}\n", .{new_fn_line});
+
+    const new_line = try convertArgs2Snake(self.allo, new_fn_line);
+    defer self.allo.free(new_line);
+    // std.debug.print("New Line: {s}\n", .{new_line});
+
+    try self.write(new_line);
 
     return start;
 }
 
-fn processExternFn(self: *const TextData, idx: usize) !usize {
-    // TODO: write line as is, but needs to import data at top: const DWORD = std.os.windows.DWORD;
-    var start = idx;
-    const line = self.getNextLine(start);
-    start +%= line.len +% newline_chars.len;
+fn processExternFn(self: *const TextData, idx: usize) !void {
+    const line = self.getPrevLine(idx);
     try self.write(line);
-    return start;
 }
 
-fn processExternVar(self: *const TextData, idx: usize) !usize {
+fn processExternVar(self: *const TextData, idx: usize) !void {
     // TODO: write line as is, but needs to import data at top: const DWORD = std.os.windows.DWORD;
-    var start = idx;
-    const line = self.getNextLine(start);
-    start +%= line.len +% newline_chars.len;
+    const line = self.getPrevLine(idx);
     try self.write(line);
-    return start;
 }
 
-fn processExternConst(self: *const TextData, idx: usize) !usize {
+fn processExternConst(self: *const TextData, idx: usize) !void {
     // TODO: write line as is, but needs to import data at top: const DWORD = std.os.windows.DWORD;
-    var start = idx;
-    const line = self.getNextLine(start);
-    start +%= line.len +% newline_chars.len;
+    const line = self.getPrevLine(idx);
     try self.write(line);
-    return start;
 }
 
-fn processExportVar(self: *const TextData, idx: usize) !usize {
+fn processExportVar(self: *const TextData, idx: usize) !void {
     // TODO: write line as is, but need to import data at top;
-    var start = idx;
-    const line = self.getNextLine(start);
-    start +%= line.len +% newline_chars.len;
+    const line = self.getPrevLine(idx);
     try self.write(line);
-    return start;
 }
 
 fn processFn(self: *const TextData, idx: usize) !usize {
+    var line = self.getPrevLine(idx);
+    try self.write(line);
+
     var start: usize = idx;
     while (true) {
-        const line = self.getNextLine(start);
+        line = self.getNextLine(start);
         start +%= line.len +% newline_chars.len;
         try self.write(line);
         if (std.mem.eql(u8, line, "}")) break;
@@ -408,667 +401,747 @@ fn processFn(self: *const TextData, idx: usize) !usize {
     return start;
 }
 
-fn processTypeName(self: *TextData, idx: usize) !void {
-    const line = self.getPrevLine(idx);
-
-    const snake_name = blk: {
-        const eql_idx = std.mem.indexOfScalar(u8, line, '=').? -% 1;
-        const space_idx = std.mem.lastIndexOfScalar(u8, line[0..eql_idx], ' ').? +% 1;
-        const name = line[space_idx..eql_idx];
-        break :blk try cc.convert(self.allo, name, .snake);
-    };
-    defer self.allo.free(snake_name);
-
-    const trim_vk_prefix = try replaceVkStrs(self.allo, snake_name);
-    defer self.allo.free(trim_vk_prefix);
-    // std.debug.print("Trim Prefix: {s}\n", .{trim_vk_prefix});
-
-    const type_name = blk: {
-        const open_paren_idx = std.mem.lastIndexOfScalar(u8, line, '(').? +% 1;
-        const comma_idx = std.mem.lastIndexOfScalar(u8, line, ',').?;
-        const type_name = line[open_paren_idx..comma_idx];
-        const type_name2 = if (std.mem.eql(u8, type_name, "c_uint")) "u32" else if (std.mem.eql(u8, type_name, "c_int")) "i32" else unreachable;
-        break :blk try self.allo.dupe(u8, type_name2);
-    };
-    defer self.allo.free(type_name);
-
-    const new_field_name = try std.fmt.allocPrint(
-        self.allo,
-        "{s}: {s}",
-        .{ trim_vk_prefix, type_name },
-    );
-    // defer self.allo.free(new_field_name);
-    // std.debug.print("New Field Name: {s}\n", .{new_field_name});
-
-    const new_field_value = blk: {
-        const close_paren_idx = std.mem.lastIndexOfScalar(u8, line, ')').?;
-        const space_idx = std.mem.lastIndexOfScalar(u8, line, ' ').? +% 1;
-        const value = line[space_idx..close_paren_idx];
-        break :blk try self.allo.dupe(u8, value);
-    };
-    // defer self.allo.free(new_field_value);
-    // std.debug.print("New Field Value: {s}\n", .{new_field_value});
-
-    try self.type_names.append(.{
-        .name = new_field_name,
-        .value = new_field_value,
-    });
-}
-
-fn writeTypeNames(self: *const TextData) !void {
-    try self.write("pub const TypeName = struct {");
-    for (self.type_names.items) |tn| {
-        const newline = try std.fmt.allocPrint(self.allo, "{s} = {s},", .{ tn.name, tn.value });
-        defer self.allo.free(newline);
-        try self.write(newline);
-    }
-    try self.write("};");
-}
-
-fn processExtensionName(self: *TextData, idx: usize) !void {
-    const line = self.getPrevLine(idx);
-
-    const screaming_snake_name = blk: {
-        const eql_idx = std.mem.indexOfScalar(u8, line, '=').? -% 1;
-        const space_idx = std.mem.lastIndexOfScalar(u8, line[0..eql_idx], ' ').? +% 1;
-        const name = line[space_idx..eql_idx];
-        break :blk try self.allo.dupe(u8, name);
-    };
-    defer self.allo.free(screaming_snake_name);
-
-    const trim_vk_prefix = try replaceVkStrs(self.allo, screaming_snake_name);
-    defer self.allo.free(trim_vk_prefix);
-
-    const suffix = "_EXTENSION_NAME";
-    const trim_ext_suffix = trim_vk_prefix[0 .. trim_vk_prefix.len -% suffix.len];
-
-    const new_field_name = try cc.convert(self.allo, trim_ext_suffix, .snake);
-
-    const new_field_value = blk: {
-        const semicolon_idx = std.mem.lastIndexOfScalar(u8, line, ';').?;
-        const space_idx = std.mem.lastIndexOfScalar(u8, line[0..semicolon_idx], ' ').? +% 1;
-        const value = line[space_idx..semicolon_idx];
-        break :blk try self.allo.dupe(u8, value);
-    };
-
-    try self.extension_names.append(.{
-        .name = new_field_name,
-        .value = new_field_value,
-    });
-}
-
-fn writeExtensionNames(self: *const TextData) !void {
-    try self.write("pub const ExtensionNames = struct {");
-    for (self.extension_names.items) |en| {
-        const newline = try std.fmt.allocPrint(
-            self.allo,
-            "{s}:{s},",
-            .{ en.name, en.value },
-        );
-        defer self.allo.free(newline);
-        try self.write(newline);
-    }
-    try self.write("};");
-}
-
-fn processSpecVersion(self: *TextData, idx: usize) !void {
-    const line = self.getPrevLine(idx);
-    // std.debug.print("Line: {s}\n", .{line});
-
-    const snake_name = blk: {
-        const eql_idx = std.mem.indexOfScalar(u8, line, '=').? -% 1;
-        const space_idx = std.mem.lastIndexOfScalar(u8, line[0..eql_idx], ' ').? +% 1;
-        const name = line[space_idx..eql_idx];
-        break :blk try cc.convert(self.allo, name, .snake);
-    };
-    defer self.allo.free(snake_name);
-
-    const trim_vk_prefix = try replaceVkStrs(self.allo, snake_name);
-    defer self.allo.free(trim_vk_prefix);
-
-    const suffix = "_SPEC_VERSION";
-    const trim_suffix = trim_vk_prefix[0 .. trim_vk_prefix.len -% suffix.len];
-
-    const field_name = try self.allo.dupe(u8, trim_suffix);
-    defer self.allo.free(field_name);
-
-    const field_type = blk: {
-        const open_paren_idx = std.mem.lastIndexOfScalar(u8, line, '(').? +% 1;
-        const comma_idx = std.mem.lastIndexOfScalar(u8, line, ',').?;
-        const type_name = line[open_paren_idx..comma_idx];
-        const type_name2 = if (std.mem.eql(u8, type_name, "c_int")) "i32" else if (std.mem.eql(u8, type_name, "c_uint")) "u32" else unreachable;
-        break :blk try self.allo.dupe(u8, type_name2);
-    };
-    defer self.allo.free(field_type);
-
-    const new_field_name = try std.fmt.allocPrint(self.allo, "{s}:{s}", .{ field_name, field_type });
-    // defer self.allo.free(new_field_name);
-    // std.debug.print("Field Name: {s}\n", .{new_field_name});
-
-    const new_field_value = blk: {
-        const space_idx = std.mem.lastIndexOfScalar(u8, line, ' ').? +% 1;
-        const close_paren_idx = std.mem.lastIndexOfScalar(u8, line, ')').?;
-        const value = line[space_idx..close_paren_idx];
-        break :blk try self.allo.dupe(u8, value);
-    };
-    // defer self.allo.free(new_field_value);
-    // std.debug.print("Field Value: {s}\n", .{new_field_value});
-
-    try self.spec_versions.append(.{
-        .name = new_field_name,
-        .value = new_field_value,
-    });
-}
-
-fn writeSpecVersions(self: *const TextData) !void {
-    try self.write("pub const SpecVersion = struct {");
-    for (self.spec_versions.items) |sv| {
-        const newline = try std.fmt.allocPrint(
-            self.allo,
-            "{s} = {s},",
-            .{ sv.name, sv.value },
-        );
-        defer self.allo.free(newline);
-        try self.write(newline);
-    }
-    try self.write("};");
-}
-
-fn processPFN(self: *const TextData, idx: usize) !usize {
-    var start = idx;
-    const line = self.getNextLine(start);
-    start +%= line.len +% newline_chars.len;
-
-    var rline = try replaceVkStrs(self.allo, line);
-    defer self.allo.free(rline);
-    const prefix = "pub extern fn ";
-    rline[prefix.len] = std.ascii.toLower(rline[prefix.len]);
-
-    // change case
-    var curr_idx = std.mem.indexOfScalar(u8, rline, '(').?;
-    while (true) {
-        const colon_idx = std.mem.indexOfScalar(u8, rline[curr_idx..], ':') orelse break;
-        curr_idx +%= colon_idx +% 1;
-
-        const prev_space_idx = std.mem.lastIndexOfScalar(u8, rline[0..curr_idx], ' ') orelse 0;
-        const prev_paren_idx = std.mem.lastIndexOfScalar(u8, rline[0..curr_idx], '(') orelse 0;
-
-        const max_idx = @max(prev_space_idx, prev_paren_idx) +% 1;
-        const old_str = rline[max_idx .. curr_idx -% 1];
-        const new_str = try cc.convert(self.allo, old_str, .snake);
-        defer self.allo.free(new_str);
-
-        const temp = try std.mem.replaceOwned(u8, self.allo, rline, old_str, new_str);
-        self.allo.free(rline);
-        rline = temp;
-    }
-    try self.write(rline);
-
-    return start;
-}
-
-fn processImport(self: *const TextData, idx: usize) !usize {
-    var start = idx;
-    const line = self.getNextLine(start);
-    start +%= line.len +% newline_chars.len;
-    try self.write(line);
-    return start;
-}
-
-fn processOpaque(self: *const TextData, idx: usize) !usize {
-    var start = idx;
-    const line = self.getNextLine(start);
-    start +%= line.len +% newline_chars.len;
-    const line1 = self.getNextLine(start);
-    start +%= line1.len +% newline_chars.len;
-
-    const prefix = "pub const ";
-    const space_idx = std.mem.indexOfScalar(u8, line1[prefix.len..], ' ').?;
-    const name = line1[prefix.len .. prefix.len +% space_idx];
-
-    const line2 = try std.fmt.allocPrint(self.allo, "pub const {s} = enum(u64){{ null=0, _ }};\n", .{name});
-    defer self.allo.free(line2);
-    try self.write(line2);
-
-    return start;
-}
-
-fn processExternStructVk(self: *const TextData, idx: usize) !usize {
-    var start = idx;
-    { // title
-        const line = self.getNextLine(start);
-        start +%= line.len +% newline_chars.len;
-
-        const prefix = "pub const struct_Vk";
-        const space_idx = std.mem.indexOfScalar(u8, line[prefix.len..], ' ').?;
-        const new_name = line[prefix.len .. prefix.len +% space_idx];
-
-        const new_title = try std.fmt.allocPrint(
-            self.allo,
-            "pub const {s} = extern struct {{\n",
-            .{new_name},
-        );
-        defer self.allo.free(new_title);
-        try self.write(new_title);
-    }
-
-    // body
-    while (true) {
-        const line = self.getNextLine(start);
-        start +%= line.len +% newline_chars.len;
-
-        const rline = try replaceVkStrs(self.allo, line);
-        defer self.allo.free(rline);
-        try self.write(rline);
-
-        if (std.mem.eql(u8, line, "};")) break;
-    }
-
-    // skip next line
-    const line1 = self.getNextLine(start);
-    start +%= line1.len +% newline_chars.len;
-    return start;
-}
-
-fn processExternStruct(self: *const TextData, idx: usize) !usize {
-    var start = idx;
-    { // title
-        const line = self.getNextLine(start);
-        start +%= line.len +% newline_chars.len;
-        try self.write(line);
-    }
-
-    while (true) {
-        const line = self.getNextLine(start);
-        start +%= line.len +% newline_chars.len;
-
-        const maybe_colon_idx = std.mem.indexOfScalar(u8, line, ':');
-        if (maybe_colon_idx) |colon_idx| {
-            const start_idx = std.mem.lastIndexOfScalar(u8, line[0..colon_idx], ' ').?;
-            const name = line[start_idx +% 1 .. colon_idx];
-
-            const name1 = cc.convert(self.allo, name, .snake) catch {
-                try self.write(line);
-                continue;
-            };
-            defer self.allo.free(name1);
-
-            const newline = try std.mem.replaceOwned(u8, self.allo, line, name, name1);
-            defer self.allo.free(newline);
-            try self.write(newline);
-            continue;
-        }
-
-        try self.write(line);
-        if (std.mem.eql(u8, line, "};")) break;
-    }
-
-    return start;
-}
-
-fn processEnum1(self: *const TextData, idx: usize) !usize {
-    const prev_line = self.getPrevLine(idx);
-    const found_type = blk: {
-        const semicolon_idx = std.mem.lastIndexOfScalar(u8, prev_line, ';').?;
-        const space_idx = std.mem.lastIndexOfScalar(u8, prev_line, ' ').?;
-        break :blk prev_line[space_idx +% 1 .. semicolon_idx];
-    };
-    const title_type = if (std.mem.eql(u8, found_type, "c_uint")) "u32" else if (std.mem.eql(u8, found_type, "c_int")) "i32" else unreachable;
-
-    const next_line = self.getNextLine(idx);
-    const found_name = blk: {
-        const eql_idx = std.mem.indexOfScalar(u8, next_line, '=').? -% 1;
-        const space_idx = std.mem.lastIndexOfScalar(u8, next_line[0..eql_idx], ' ').? +% 1;
-        break :blk next_line[space_idx..eql_idx];
-    };
-    const title_name = try replaceFlag(self.allo, found_name);
-    defer self.allo.free(title_name);
-
-    const title_line = try std.fmt.allocPrint(
-        self.allo,
-        "pub const {s} = enum({s}) {{",
-        .{ title_name, title_type },
-    );
-    defer self.allo.free(title_line);
-    try self.write(title_line);
-
-    const title_words = try cc.split2Words(self.allo, found_name);
-    defer title_words.deinit();
-    defer for (title_words.items) |title_word| self.allo.free(title_word);
-
-    var fields = std.ArrayList(NameValue).init(self.allo);
-    defer fields.deinit();
-    defer {
-        for (fields.items) |field| {
-            self.allo.free(field.name);
-            self.allo.free(field.value);
-        }
-    }
-
-    var unique_names = std.StringHashMap(void).init(self.allo);
-    defer unique_names.deinit();
-
-    var unique_values = std.StringHashMap(void).init(self.allo);
-    defer unique_values.deinit();
-
-    var curr = idx -% prev_line.len -% newline_chars.len;
-    outer: while (curr > 0) {
-        var line = self.getPrevLine(curr);
-        curr = curr -% line.len -% newline_chars.len;
-
-        const screaming_snake_name = blk: {
-            const colon_idx = std.mem.indexOfScalar(u8, line, ':') orelse break :outer;
-            const space_idx = std.mem.lastIndexOfScalar(u8, line[0..colon_idx], ' ').?;
-            break :blk line[space_idx +% 1 .. colon_idx];
-        };
-
-        if (!cc.isCase(screaming_snake_name, .screaming_snake)) break;
-
-        const new_name = try cc.convert(self.allo, screaming_snake_name, .snake);
-        defer self.allo.free(new_name);
-
-        var name_words = try cc.split2Words(self.allo, new_name);
-        defer name_words.deinit();
-        defer for (name_words.items) |name_word| self.allo.free(name_word);
-
-        const matches = try getMatches(self.allo, name_words, title_words);
-        defer self.allo.free(matches);
-        if (!anyMatches(matches)) break;
-
-        for (0..matches.len) |i| {
-            const j = matches.len -% i -% 1;
-            if (!matches[j]) continue;
-            const word = name_words.orderedRemove(j);
-            self.allo.free(word);
-        }
-
-        const temp_field_name = if (name_words.items.len > 0) try cc.words2Snake(self.allo, name_words) else try self.allo.dupe(u8, "_base");
-        defer self.allo.free(temp_field_name);
-
-        const new_field_name = blk: {
-            var new_field_name: []u8 = undefined;
-            if (isKeyword(temp_field_name) or std.ascii.isDigit(temp_field_name[0])) {
-                new_field_name = try std.fmt.allocPrint(self.allo, "_{s}", .{temp_field_name});
-            } else {
-                new_field_name = try self.allo.dupe(u8, temp_field_name);
-            }
-            break :blk new_field_name;
-        };
-
-        const new_field_value = blk: {
-            const semicolon_idx = std.mem.indexOfScalar(u8, line, ';').?;
-            const space_idx = std.mem.lastIndexOfScalar(u8, line[0..semicolon_idx], ' ').? +% 1;
-            break :blk try self.allo.dupe(u8, line[space_idx..semicolon_idx]);
-        };
-
-        if (unique_names.get(new_field_name)) |_| {
-            self.allo.free(new_field_name);
-            self.allo.free(new_field_value);
-            continue;
-        }
-
-        if (unique_values.get(new_field_value)) |_| {
-            self.allo.free(new_field_name);
-            self.allo.free(new_field_value);
-            continue;
-        }
-
-        try unique_names.put(new_field_name, {});
-        try unique_values.put(new_field_value, {});
-
-        try fields.append(.{
-            .name = new_field_name,
-            .value = new_field_value,
-        });
-    }
-
-    for (0..fields.items.len) |i| {
-        const j = fields.items.len -% i -% 1;
-        const field = fields.items[j];
-        const field_line = try std.fmt.allocPrint(
-            self.allo,
-            "{s} = {s},",
-            .{ field.name, field.value },
-        );
-        defer self.allo.free(field_line);
-        try self.write(field_line);
-    }
-
-    try self.write("};");
-
-    return idx +% next_line.len +% newline_chars.len;
-}
-
-fn processEnum2(self: *const TextData, idx: usize) !usize {
-    var start: usize = idx;
-
-    const prev_line = self.getPrevLine(start);
-    const found_name = blk: {
-        const eql_idx = std.mem.indexOfScalar(u8, prev_line, '=').? -% 1;
-        const name_space_idx = std.mem.lastIndexOfScalar(u8, prev_line[0..eql_idx], ' ').? +% 1;
-        break :blk prev_line[name_space_idx..eql_idx];
-    };
-    const title_name = try replaceFlag(self.allo, found_name);
-    defer self.allo.free(title_name);
-
-    const found_type = blk: {
-        const semicolon_idx = std.mem.lastIndexOfScalar(u8, prev_line, ';').?;
-        const type_space_idx = std.mem.lastIndexOfScalar(u8, prev_line[0..semicolon_idx], ' ').? +% 1;
-        break :blk prev_line[type_space_idx..semicolon_idx];
-    };
-    const title_type = if (std.mem.eql(u8, found_type, "VkFlags")) "u32" else if (std.mem.eql(u8, found_type, "VkFlags64")) "u64" else unreachable;
-
-    const title_line = try std.fmt.allocPrint(self.allo, "pub const {s} = enum({s}) {{", .{ title_name, title_type });
-    defer self.allo.free(title_line);
-    try self.write(title_line);
-
-    var title_words = try cc.split2Words(self.allo, found_name);
-    defer title_words.deinit();
-    for (title_words.items, 0..) |*title_word, i| {
-        const word = title_word.*;
-        if (word.len > 1 and std.ascii.isDigit(word[word.len -% 1])) {
-            const new_digit = try self.allo.dupe(u8, word[word.len -% 1 .. word.len]);
-            try title_words.insert(i +% 1, new_digit);
-
-            const new_word = try self.allo.alloc(u8, word.len -% 1);
-            @memcpy(new_word, word[0 .. word.len -% 1]);
-            self.allo.free(title_word.*);
-            title_word.* = new_word;
-        }
-    }
-    defer for (title_words.items) |title_word| self.allo.free(title_word);
-
-    var line: []const u8 = undefined;
-    while (true) {
-        line = self.getNextLine(start);
-        if (std.mem.indexOfScalar(u8, line, ':') != null) break;
-        start +%= line.len +% newline_chars.len;
-    }
-
-    var fields = std.ArrayList(NameValue).init(self.allo);
-    defer fields.deinit();
-    defer for (fields.items) |field| {
-        self.allo.free(field.name);
-        self.allo.free(field.value);
-    };
-
-    var unique_names = std.StringHashMap(void).init(self.allo);
-    defer unique_names.deinit();
-
-    var unique_values = std.StringHashMap(void).init(self.allo);
-    defer unique_values.deinit();
-
-    while (true) {
-        line = self.getNextLine(start);
-        start +%= line.len +% newline_chars.len;
-
-        const screaming_snake_name = blk: {
-            const colon_idx = std.mem.indexOfScalar(u8, line, ':') orelse break;
-            const space_idx = std.mem.lastIndexOfScalar(u8, line[0..colon_idx], ' ').? +% 1;
-            break :blk line[space_idx..colon_idx];
-        };
-
-        if (!cc.isCase(screaming_snake_name, .screaming_snake)) break;
-
-        var name_words = try cc.split2Words(self.allo, screaming_snake_name);
-        defer name_words.deinit();
-        defer for (name_words.items) |name_word| self.allo.free(name_word);
-
-        const matches = try getMatches(self.allo, name_words, title_words);
-        defer self.allo.free(matches);
-        if (!anyMatches(matches)) break;
-        for (0..matches.len) |i| {
-            const j = matches.len -% i -% 1;
-            if (!matches[j]) continue;
-            const word = name_words.orderedRemove(j);
-            self.allo.free(word);
-        }
-
-        const temp_field_name = if (name_words.items.len > 0) try cc.words2Snake(self.allo, name_words) else try self.allo.dupe(u8, "_base");
-        defer self.allo.free(temp_field_name);
-
-        const new_field_name = blk: {
-            var new_field_name: []u8 = undefined;
-            if (isKeyword(temp_field_name) or std.ascii.isDigit(temp_field_name[0])) {
-                new_field_name = try self.allo.alloc(u8, temp_field_name.len +% 1);
-                @memcpy(new_field_name[1..new_field_name.len], new_field_name);
-                new_field_name[0] = '_';
-            } else {
-                new_field_name = try self.allo.dupe(u8, temp_field_name);
-            }
-            break :blk new_field_name;
-        };
-
-        const new_field_value = blk: {
-            const semicolon_idx = std.mem.lastIndexOfScalar(u8, line, ';').?;
-            const value_space_idx = std.mem.lastIndexOfScalar(u8, line[0..semicolon_idx], ' ').? +% 1;
-            break :blk try self.allo.dupe(u8, line[value_space_idx..semicolon_idx]);
-        };
-
-        if (unique_names.get(new_field_name)) |_| {
-            self.allo.free(new_field_name);
-            self.allo.free(new_field_value);
-            continue;
-        }
-
-        if (unique_values.get(new_field_value)) |_| {
-            self.allo.free(new_field_name);
-            self.allo.free(new_field_value);
-            continue;
-        }
-
-        try unique_names.put(new_field_name, {});
-        try unique_values.put(new_field_value, {});
-
-        try fields.append(.{
-            .name = new_field_name,
-            .value = new_field_value,
-        });
-    }
-
-    for (fields.items) |field| {
-        const newline = try std.fmt.allocPrint(
-            self.allo,
-            "{s} = {s},",
-            .{ field.name, field.value },
-        );
-        defer self.allo.free(newline);
-        try self.write(newline);
-    }
-
-    try self.write("};");
-
-    return start;
-}
-
-fn processType(self: *const TextData, idx: usize) !void {
-    const line = self.getPrevLine(idx);
-
-    const temp_name = blk: {
-        const eql_idx = std.mem.indexOfScalar(u8, line, '=').? -% 1;
-        const space_idx = std.mem.lastIndexOfScalar(u8, line[0..eql_idx], ' ').? +% 1;
-        const name = line[space_idx..eql_idx];
-        break :blk try self.allo.dupe(u8, name);
-    };
-    defer self.allo.free(temp_name);
-
-    const name = try replaceVkStrs(self.allo, temp_name);
-    defer self.allo.free(name);
-    // std.debug.print("Name: {s}\n", .{name});
-
-    if (std.mem.eql(u8, name, "Bool32")) {
-        try self.write("pub const Bool32 = enum(u32) {\n false = 0,\n true = 1,\n };");
-        return;
-    }
-
-    const value = blk: {
-        const semicolon_idx = std.mem.lastIndexOfScalar(u8, line, ';').?;
-        const space_idx = std.mem.lastIndexOfScalar(u8, line[0..semicolon_idx], ' ').? +% 1;
-        const value = line[space_idx..semicolon_idx];
-        break :blk try self.allo.dupe(u8, value);
-    };
-    defer self.allo.free(value);
-    // std.debug.print("Value: {s}\n", .{value});
-
-    const newline = try std.fmt.allocPrint(
-        self.allo,
-        "pub const {s} = {s};",
-        .{ name, value },
-    );
-    defer self.allo.free(newline);
-    try self.write(newline);
-}
+// fn processTypeName(self: *TextData, idx: usize) !void {
+//     const line = self.getPrevLine(idx);
+//
+//     const snake_name = blk: {
+//         const eql_idx = std.mem.indexOfScalar(u8, line, '=').? -% 1;
+//         const space_idx = std.mem.lastIndexOfScalar(u8, line[0..eql_idx], ' ').? +% 1;
+//         const name = line[space_idx..eql_idx];
+//         break :blk try cc.convert(self.allo, name, .snake);
+//     };
+//     defer self.allo.free(snake_name);
+//
+//     const trim_vk_prefix = try replaceVkStrs(self.allo, snake_name);
+//     defer self.allo.free(trim_vk_prefix);
+//     // std.debug.print("Trim Prefix: {s}\n", .{trim_vk_prefix});
+//
+//     const type_name = blk: {
+//         const open_paren_idx = std.mem.lastIndexOfScalar(u8, line, '(').? +% 1;
+//         const comma_idx = std.mem.lastIndexOfScalar(u8, line, ',').?;
+//         const type_name = line[open_paren_idx..comma_idx];
+//         const type_name2 = if (std.mem.eql(u8, type_name, "c_uint")) "u32" else if (std.mem.eql(u8, type_name, "c_int")) "i32" else unreachable;
+//         break :blk try self.allo.dupe(u8, type_name2);
+//     };
+//     defer self.allo.free(type_name);
+//
+//     const new_field_name = try std.fmt.allocPrint(
+//         self.allo,
+//         "{s}: {s}",
+//         .{ trim_vk_prefix, type_name },
+//     );
+//     // defer self.allo.free(new_field_name);
+//     // std.debug.print("New Field Name: {s}\n", .{new_field_name});
+//
+//     const new_field_value = blk: {
+//         const close_paren_idx = std.mem.lastIndexOfScalar(u8, line, ')').?;
+//         const space_idx = std.mem.lastIndexOfScalar(u8, line, ' ').? +% 1;
+//         const value = line[space_idx..close_paren_idx];
+//         break :blk try self.allo.dupe(u8, value);
+//     };
+//     // defer self.allo.free(new_field_value);
+//     // std.debug.print("New Field Value: {s}\n", .{new_field_value});
+//
+//     try self.type_names.append(.{
+//         .name = new_field_name,
+//         .value = new_field_value,
+//     });
+// }
+//
+// fn writeTypeNames(self: *const TextData) !void {
+//     try self.write("pub const TypeName = struct {");
+//     for (self.type_names.items) |tn| {
+//         const newline = try std.fmt.allocPrint(self.allo, "{s} = {s},", .{ tn.name, tn.value });
+//         defer self.allo.free(newline);
+//         try self.write(newline);
+//     }
+//     try self.write("};");
+// }
+//
+// fn processExtensionName(self: *TextData, idx: usize) !void {
+//     const line = self.getPrevLine(idx);
+//
+//     const screaming_snake_name = blk: {
+//         const eql_idx = std.mem.indexOfScalar(u8, line, '=').? -% 1;
+//         const space_idx = std.mem.lastIndexOfScalar(u8, line[0..eql_idx], ' ').? +% 1;
+//         const name = line[space_idx..eql_idx];
+//         break :blk try self.allo.dupe(u8, name);
+//     };
+//     defer self.allo.free(screaming_snake_name);
+//
+//     const trim_vk_prefix = try replaceVkStrs(self.allo, screaming_snake_name);
+//     defer self.allo.free(trim_vk_prefix);
+//
+//     const suffix = "_EXTENSION_NAME";
+//     const trim_ext_suffix = trim_vk_prefix[0 .. trim_vk_prefix.len -% suffix.len];
+//
+//     const new_field_name = try cc.convert(self.allo, trim_ext_suffix, .snake);
+//
+//     const new_field_value = blk: {
+//         const semicolon_idx = std.mem.lastIndexOfScalar(u8, line, ';').?;
+//         const space_idx = std.mem.lastIndexOfScalar(u8, line[0..semicolon_idx], ' ').? +% 1;
+//         const value = line[space_idx..semicolon_idx];
+//         break :blk try self.allo.dupe(u8, value);
+//     };
+//
+//     try self.extension_names.append(.{
+//         .name = new_field_name,
+//         .value = new_field_value,
+//     });
+// }
+//
+// fn writeExtensionNames(self: *const TextData) !void {
+//     try self.write("pub const ExtensionNames = struct {");
+//     for (self.extension_names.items) |en| {
+//         const newline = try std.fmt.allocPrint(
+//             self.allo,
+//             "{s}:{s},",
+//             .{ en.name, en.value },
+//         );
+//         defer self.allo.free(newline);
+//         try self.write(newline);
+//     }
+//     try self.write("};");
+// }
+//
+// fn processSpecVersion(self: *TextData, idx: usize) !void {
+//     const line = self.getPrevLine(idx);
+//     // std.debug.print("Line: {s}\n", .{line});
+//
+//     const snake_name = blk: {
+//         const eql_idx = std.mem.indexOfScalar(u8, line, '=').? -% 1;
+//         const space_idx = std.mem.lastIndexOfScalar(u8, line[0..eql_idx], ' ').? +% 1;
+//         const name = line[space_idx..eql_idx];
+//         break :blk try cc.convert(self.allo, name, .snake);
+//     };
+//     defer self.allo.free(snake_name);
+//
+//     const trim_vk_prefix = try replaceVkStrs(self.allo, snake_name);
+//     defer self.allo.free(trim_vk_prefix);
+//
+//     const suffix = "_SPEC_VERSION";
+//     const trim_suffix = trim_vk_prefix[0 .. trim_vk_prefix.len -% suffix.len];
+//
+//     const field_name = try self.allo.dupe(u8, trim_suffix);
+//     defer self.allo.free(field_name);
+//
+//     const field_type = blk: {
+//         const open_paren_idx = std.mem.lastIndexOfScalar(u8, line, '(').? +% 1;
+//         const comma_idx = std.mem.lastIndexOfScalar(u8, line, ',').?;
+//         const type_name = line[open_paren_idx..comma_idx];
+//         const type_name2 = if (std.mem.eql(u8, type_name, "c_int")) "i32" else if (std.mem.eql(u8, type_name, "c_uint")) "u32" else unreachable;
+//         break :blk try self.allo.dupe(u8, type_name2);
+//     };
+//     defer self.allo.free(field_type);
+//
+//     const new_field_name = try std.fmt.allocPrint(self.allo, "{s}:{s}", .{ field_name, field_type });
+//     // defer self.allo.free(new_field_name);
+//     // std.debug.print("Field Name: {s}\n", .{new_field_name});
+//
+//     const new_field_value = blk: {
+//         const space_idx = std.mem.lastIndexOfScalar(u8, line, ' ').? +% 1;
+//         const close_paren_idx = std.mem.lastIndexOfScalar(u8, line, ')').?;
+//         const value = line[space_idx..close_paren_idx];
+//         break :blk try self.allo.dupe(u8, value);
+//     };
+//     // defer self.allo.free(new_field_value);
+//     // std.debug.print("Field Value: {s}\n", .{new_field_value});
+//
+//     try self.spec_versions.append(.{
+//         .name = new_field_name,
+//         .value = new_field_value,
+//     });
+// }
+//
+// fn writeSpecVersions(self: *const TextData) !void {
+//     try self.write("pub const SpecVersion = struct {");
+//     for (self.spec_versions.items) |sv| {
+//         const newline = try std.fmt.allocPrint(
+//             self.allo,
+//             "{s} = {s},",
+//             .{ sv.name, sv.value },
+//         );
+//         defer self.allo.free(newline);
+//         try self.write(newline);
+//     }
+//     try self.write("};");
+// }
+//
+// fn processPFN(self: *const TextData, idx: usize) !usize {
+//     var start = idx;
+//     const line = self.getNextLine(start);
+//     start +%= line.len +% newline_chars.len;
+//
+//     var rline = try replaceVkStrs(self.allo, line);
+//     defer self.allo.free(rline);
+//     const prefix = "pub extern fn ";
+//     rline[prefix.len] = std.ascii.toLower(rline[prefix.len]);
+//
+//     // change case
+//     var curr_idx = std.mem.indexOfScalar(u8, rline, '(').?;
+//     while (true) {
+//         const colon_idx = std.mem.indexOfScalar(u8, rline[curr_idx..], ':') orelse break;
+//         curr_idx +%= colon_idx +% 1;
+//
+//         const prev_space_idx = std.mem.lastIndexOfScalar(u8, rline[0..curr_idx], ' ') orelse 0;
+//         const prev_paren_idx = std.mem.lastIndexOfScalar(u8, rline[0..curr_idx], '(') orelse 0;
+//
+//         const max_idx = @max(prev_space_idx, prev_paren_idx) +% 1;
+//         const old_str = rline[max_idx .. curr_idx -% 1];
+//         const new_str = try cc.convert(self.allo, old_str, .snake);
+//         defer self.allo.free(new_str);
+//
+//         const temp = try std.mem.replaceOwned(u8, self.allo, rline, old_str, new_str);
+//         self.allo.free(rline);
+//         rline = temp;
+//     }
+//     try self.write(rline);
+//
+//     return start;
+// }
+//
+// fn processImport(self: *const TextData, idx: usize) !usize {
+//     var start = idx;
+//     const line = self.getNextLine(start);
+//     start +%= line.len +% newline_chars.len;
+//     try self.write(line);
+//     return start;
+// }
+//
+// fn processOpaque(self: *const TextData, idx: usize) !usize {
+//     var start = idx;
+//     const line = self.getNextLine(start);
+//     start +%= line.len +% newline_chars.len;
+//     const line1 = self.getNextLine(start);
+//     start +%= line1.len +% newline_chars.len;
+//
+//     const prefix = "pub const ";
+//     const space_idx = std.mem.indexOfScalar(u8, line1[prefix.len..], ' ').?;
+//     const name = line1[prefix.len .. prefix.len +% space_idx];
+//
+//     const line2 = try std.fmt.allocPrint(self.allo, "pub const {s} = enum(u64){{ null=0, _ }};\n", .{name});
+//     defer self.allo.free(line2);
+//     try self.write(line2);
+//
+//     return start;
+// }
+//
+// fn processExternStructVk(self: *const TextData, idx: usize) !usize {
+//     var start = idx;
+//     { // title
+//         const line = self.getNextLine(start);
+//         start +%= line.len +% newline_chars.len;
+//
+//         const prefix = "pub const struct_Vk";
+//         const space_idx = std.mem.indexOfScalar(u8, line[prefix.len..], ' ').?;
+//         const new_name = line[prefix.len .. prefix.len +% space_idx];
+//
+//         const new_title = try std.fmt.allocPrint(
+//             self.allo,
+//             "pub const {s} = extern struct {{\n",
+//             .{new_name},
+//         );
+//         defer self.allo.free(new_title);
+//         try self.write(new_title);
+//     }
+//
+//     // body
+//     while (true) {
+//         const line = self.getNextLine(start);
+//         start +%= line.len +% newline_chars.len;
+//
+//         const rline = try replaceVkStrs(self.allo, line);
+//         defer self.allo.free(rline);
+//         try self.write(rline);
+//
+//         if (std.mem.eql(u8, line, "};")) break;
+//     }
+//
+//     // skip next line
+//     const line1 = self.getNextLine(start);
+//     start +%= line1.len +% newline_chars.len;
+//     return start;
+// }
+//
+// fn processExternStruct(self: *const TextData, idx: usize) !usize {
+//     var start = idx;
+//     { // title
+//         const line = self.getNextLine(start);
+//         start +%= line.len +% newline_chars.len;
+//         try self.write(line);
+//     }
+//
+//     while (true) {
+//         const line = self.getNextLine(start);
+//         start +%= line.len +% newline_chars.len;
+//
+//         const maybe_colon_idx = std.mem.indexOfScalar(u8, line, ':');
+//         if (maybe_colon_idx) |colon_idx| {
+//             const start_idx = std.mem.lastIndexOfScalar(u8, line[0..colon_idx], ' ').?;
+//             const name = line[start_idx +% 1 .. colon_idx];
+//
+//             const name1 = cc.convert(self.allo, name, .snake) catch {
+//                 try self.write(line);
+//                 continue;
+//             };
+//             defer self.allo.free(name1);
+//
+//             const newline = try std.mem.replaceOwned(u8, self.allo, line, name, name1);
+//             defer self.allo.free(newline);
+//             try self.write(newline);
+//             continue;
+//         }
+//
+//         try self.write(line);
+//         if (std.mem.eql(u8, line, "};")) break;
+//     }
+//
+//     return start;
+// }
+//
+// fn processEnum1(self: *const TextData, idx: usize) !usize {
+//     const prev_line = self.getPrevLine(idx);
+//     const found_type = blk: {
+//         const semicolon_idx = std.mem.lastIndexOfScalar(u8, prev_line, ';').?;
+//         const space_idx = std.mem.lastIndexOfScalar(u8, prev_line, ' ').?;
+//         break :blk prev_line[space_idx +% 1 .. semicolon_idx];
+//     };
+//     const title_type = if (std.mem.eql(u8, found_type, "c_uint")) "u32" else if (std.mem.eql(u8, found_type, "c_int")) "i32" else unreachable;
+//
+//     const next_line = self.getNextLine(idx);
+//     const found_name = blk: {
+//         const eql_idx = std.mem.indexOfScalar(u8, next_line, '=').? -% 1;
+//         const space_idx = std.mem.lastIndexOfScalar(u8, next_line[0..eql_idx], ' ').? +% 1;
+//         break :blk next_line[space_idx..eql_idx];
+//     };
+//     const title_name = try removeSuffix(self.allo, &.{"FlagsKHR", "Flags"});
+//     const title_name = try replaceFlag(self.allo, found_name);
+//     defer self.allo.free(title_name);
+//
+//     const title_line = try std.fmt.allocPrint(
+//         self.allo,
+//         "pub const {s} = enum({s}) {{",
+//         .{ title_name, title_type },
+//     );
+//     defer self.allo.free(title_line);
+//     try self.write(title_line);
+//
+//     const title_words = try cc.split2Words(self.allo, found_name);
+//     defer title_words.deinit();
+//     defer for (title_words.items) |title_word| self.allo.free(title_word);
+//
+//     var fields = std.ArrayList(NameValue).init(self.allo);
+//     defer fields.deinit();
+//     defer {
+//         for (fields.items) |field| {
+//             self.allo.free(field.name);
+//             self.allo.free(field.value);
+//         }
+//     }
+//
+//     var unique_names = std.StringHashMap(void).init(self.allo);
+//     defer unique_names.deinit();
+//
+//     var unique_values = std.StringHashMap(void).init(self.allo);
+//     defer unique_values.deinit();
+//
+//     var curr = idx -% prev_line.len -% newline_chars.len;
+//     outer: while (curr > 0) {
+//         var line = self.getPrevLine(curr);
+//         curr = curr -% line.len -% newline_chars.len;
+//
+//         const screaming_snake_name = blk: {
+//             const colon_idx = std.mem.indexOfScalar(u8, line, ':') orelse break :outer;
+//             const space_idx = std.mem.lastIndexOfScalar(u8, line[0..colon_idx], ' ').?;
+//             break :blk line[space_idx +% 1 .. colon_idx];
+//         };
+//
+//         if (!cc.isCase(screaming_snake_name, .screaming_snake)) break;
+//
+//         const new_name = try cc.convert(self.allo, screaming_snake_name, .snake);
+//         defer self.allo.free(new_name);
+//
+//         var name_words = try cc.split2Words(self.allo, new_name);
+//         defer name_words.deinit();
+//         defer for (name_words.items) |name_word| self.allo.free(name_word);
+//
+//         const matches = try getMatches(self.allo, name_words, title_words);
+//         defer self.allo.free(matches);
+//         if (!anyMatches(matches)) break;
+//
+//         for (0..matches.len) |i| {
+//             const j = matches.len -% i -% 1;
+//             if (!matches[j]) continue;
+//             const word = name_words.orderedRemove(j);
+//             self.allo.free(word);
+//         }
+//
+//         const temp_field_name = if (name_words.items.len > 0) try cc.words2Snake(self.allo, name_words) else try self.allo.dupe(u8, "_base");
+//         defer self.allo.free(temp_field_name);
+//
+//         const new_field_name = blk: {
+//             var new_field_name: []u8 = undefined;
+//             if (isKeyword(temp_field_name) or std.ascii.isDigit(temp_field_name[0])) {
+//                 new_field_name = try std.fmt.allocPrint(self.allo, "_{s}", .{temp_field_name});
+//             } else {
+//                 new_field_name = try self.allo.dupe(u8, temp_field_name);
+//             }
+//             break :blk new_field_name;
+//         };
+//
+//         const new_field_value = blk: {
+//             const semicolon_idx = std.mem.indexOfScalar(u8, line, ';').?;
+//             const space_idx = std.mem.lastIndexOfScalar(u8, line[0..semicolon_idx], ' ').? +% 1;
+//             break :blk try self.allo.dupe(u8, line[space_idx..semicolon_idx]);
+//         };
+//
+//         if (unique_names.get(new_field_name)) |_| {
+//             self.allo.free(new_field_name);
+//             self.allo.free(new_field_value);
+//             continue;
+//         }
+//
+//         if (unique_values.get(new_field_value)) |_| {
+//             self.allo.free(new_field_name);
+//             self.allo.free(new_field_value);
+//             continue;
+//         }
+//
+//         try unique_names.put(new_field_name, {});
+//         try unique_values.put(new_field_value, {});
+//
+//         try fields.append(.{
+//             .name = new_field_name,
+//             .value = new_field_value,
+//         });
+//     }
+//
+//     for (0..fields.items.len) |i| {
+//         const j = fields.items.len -% i -% 1;
+//         const field = fields.items[j];
+//         const field_line = try std.fmt.allocPrint(
+//             self.allo,
+//             "{s} = {s},",
+//             .{ field.name, field.value },
+//         );
+//         defer self.allo.free(field_line);
+//         try self.write(field_line);
+//     }
+//
+//     try self.write("};");
+//
+//     return idx +% next_line.len +% newline_chars.len;
+// }
+//
+// fn processEnum2(self: *const TextData, idx: usize) !usize {
+//     var start: usize = idx;
+//
+//     const prev_line = self.getPrevLine(start);
+//     const found_name = blk: {
+//         const eql_idx = std.mem.indexOfScalar(u8, prev_line, '=').? -% 1;
+//         const name_space_idx = std.mem.lastIndexOfScalar(u8, prev_line[0..eql_idx], ' ').? +% 1;
+//         break :blk prev_line[name_space_idx..eql_idx];
+//     };
+//     const title_name = try replaceFlag(self.allo, found_name);
+//     defer self.allo.free(title_name);
+//
+//     const found_type = blk: {
+//         const semicolon_idx = std.mem.lastIndexOfScalar(u8, prev_line, ';').?;
+//         const type_space_idx = std.mem.lastIndexOfScalar(u8, prev_line[0..semicolon_idx], ' ').? +% 1;
+//         break :blk prev_line[type_space_idx..semicolon_idx];
+//     };
+//     const title_type = if (std.mem.eql(u8, found_type, "VkFlags")) "u32" else if (std.mem.eql(u8, found_type, "VkFlags64")) "u64" else unreachable;
+//
+//     const title_line = try std.fmt.allocPrint(self.allo, "pub const {s} = enum({s}) {{", .{ title_name, title_type });
+//     defer self.allo.free(title_line);
+//     try self.write(title_line);
+//
+//     var title_words = try cc.split2Words(self.allo, found_name);
+//     defer title_words.deinit();
+//     for (title_words.items, 0..) |*title_word, i| {
+//         const word = title_word.*;
+//         if (word.len > 1 and std.ascii.isDigit(word[word.len -% 1])) {
+//             const new_digit = try self.allo.dupe(u8, word[word.len -% 1 .. word.len]);
+//             try title_words.insert(i +% 1, new_digit);
+//
+//             const new_word = try self.allo.alloc(u8, word.len -% 1);
+//             @memcpy(new_word, word[0 .. word.len -% 1]);
+//             self.allo.free(title_word.*);
+//             title_word.* = new_word;
+//         }
+//     }
+//     defer for (title_words.items) |title_word| self.allo.free(title_word);
+//
+//     var line: []const u8 = undefined;
+//     while (true) {
+//         line = self.getNextLine(start);
+//         if (std.mem.indexOfScalar(u8, line, ':') != null) break;
+//         start +%= line.len +% newline_chars.len;
+//     }
+//
+//     var fields = std.ArrayList(NameValue).init(self.allo);
+//     defer fields.deinit();
+//     defer for (fields.items) |field| {
+//         self.allo.free(field.name);
+//         self.allo.free(field.value);
+//     };
+//
+//     var unique_names = std.StringHashMap(void).init(self.allo);
+//     defer unique_names.deinit();
+//
+//     var unique_values = std.StringHashMap(void).init(self.allo);
+//     defer unique_values.deinit();
+//
+//     while (true) {
+//         line = self.getNextLine(start);
+//         start +%= line.len +% newline_chars.len;
+//
+//         const screaming_snake_name = blk: {
+//             const colon_idx = std.mem.indexOfScalar(u8, line, ':') orelse break;
+//             const space_idx = std.mem.lastIndexOfScalar(u8, line[0..colon_idx], ' ').? +% 1;
+//             break :blk line[space_idx..colon_idx];
+//         };
+//
+//         if (!cc.isCase(screaming_snake_name, .screaming_snake)) break;
+//
+//         var name_words = try cc.split2Words(self.allo, screaming_snake_name);
+//         defer name_words.deinit();
+//         defer for (name_words.items) |name_word| self.allo.free(name_word);
+//
+//         const matches = try getMatches(self.allo, name_words, title_words);
+//         defer self.allo.free(matches);
+//         if (!anyMatches(matches)) break;
+//         for (0..matches.len) |i| {
+//             const j = matches.len -% i -% 1;
+//             if (!matches[j]) continue;
+//             const word = name_words.orderedRemove(j);
+//             self.allo.free(word);
+//         }
+//
+//         const temp_field_name = if (name_words.items.len > 0) try cc.words2Snake(self.allo, name_words) else try self.allo.dupe(u8, "_base");
+//         defer self.allo.free(temp_field_name);
+//
+//         const new_field_name = blk: {
+//             var new_field_name: []u8 = undefined;
+//             if (isKeyword(temp_field_name) or std.ascii.isDigit(temp_field_name[0])) {
+//                 new_field_name = try self.allo.alloc(u8, temp_field_name.len +% 1);
+//                 @memcpy(new_field_name[1..new_field_name.len], new_field_name);
+//                 new_field_name[0] = '_';
+//             } else {
+//                 new_field_name = try self.allo.dupe(u8, temp_field_name);
+//             }
+//             break :blk new_field_name;
+//         };
+//
+//         const new_field_value = blk: {
+//             const semicolon_idx = std.mem.lastIndexOfScalar(u8, line, ';').?;
+//             const value_space_idx = std.mem.lastIndexOfScalar(u8, line[0..semicolon_idx], ' ').? +% 1;
+//             break :blk try self.allo.dupe(u8, line[value_space_idx..semicolon_idx]);
+//         };
+//
+//         if (unique_names.get(new_field_name)) |_| {
+//             self.allo.free(new_field_name);
+//             self.allo.free(new_field_value);
+//             continue;
+//         }
+//
+//         if (unique_values.get(new_field_value)) |_| {
+//             self.allo.free(new_field_name);
+//             self.allo.free(new_field_value);
+//             continue;
+//         }
+//
+//         try unique_names.put(new_field_name, {});
+//         try unique_values.put(new_field_value, {});
+//
+//         try fields.append(.{
+//             .name = new_field_name,
+//             .value = new_field_value,
+//         });
+//     }
+//
+//     for (fields.items) |field| {
+//         const newline = try std.fmt.allocPrint(
+//             self.allo,
+//             "{s} = {s},",
+//             .{ field.name, field.value },
+//         );
+//         defer self.allo.free(newline);
+//         try self.write(newline);
+//     }
+//
+//     try self.write("};");
+//
+//     return start;
+// }
+//
+// fn processType(self: *const TextData, idx: usize) !void {
+//     const line = self.getPrevLine(idx);
+//
+//     const temp_name = blk: {
+//         const eql_idx = std.mem.indexOfScalar(u8, line, '=').? -% 1;
+//         const space_idx = std.mem.lastIndexOfScalar(u8, line[0..eql_idx], ' ').? +% 1;
+//         const name = line[space_idx..eql_idx];
+//         break :blk try self.allo.dupe(u8, name);
+//     };
+//     defer self.allo.free(temp_name);
+//
+//     const name = try replaceVkStrs(self.allo, temp_name);
+//     defer self.allo.free(name);
+//     // std.debug.print("Name: {s}\n", .{name});
+//
+//     if (std.mem.eql(u8, name, "Bool32")) {
+//         try self.write("pub const Bool32 = enum(u32) {\n false = 0,\n true = 1,\n };");
+//         return;
+//     }
+//
+//     const value = blk: {
+//         const semicolon_idx = std.mem.lastIndexOfScalar(u8, line, ';').?;
+//         const space_idx = std.mem.lastIndexOfScalar(u8, line[0..semicolon_idx], ' ').? +% 1;
+//         const value = line[space_idx..semicolon_idx];
+//         break :blk try self.allo.dupe(u8, value);
+//     };
+//     defer self.allo.free(value);
+//     // std.debug.print("Value: {s}\n", .{value});
+//
+//     const newline = try std.fmt.allocPrint(
+//         self.allo,
+//         "pub const {s} = {s};",
+//         .{ name, value },
+//     );
+//     defer self.allo.free(newline);
+//     try self.write(newline);
+// }
 
 inline fn write(self: *const TextData, line: []const u8) !void {
     _ = try self.wfile.write(line);
     _ = try self.wfile.write("\n");
 }
 
-fn replaceVkStrs(allo: std.mem.Allocator, data: []const u8) ![]u8 {
-    var rdata = try allo.dupe(u8, data);
-    for (
-        [_][]const u8{ "VK_KHR_", "vk_khr_", "Vk", "vk_", "vk", "_vk", "]Vk", " Vk" },
-        [_][]const u8{ "", "", "", "", " ", "_", "]", " " },
-    ) |m_str, r_str| {
-        if (std.mem.indexOf(u8, rdata, m_str)) |_| {
-            const temp = try std.mem.replaceOwned(u8, allo, rdata, m_str, r_str);
-            allo.free(rdata);
-            rdata = temp;
+fn getFnName(data: []const u8) []const u8 {
+    const open_paren_idx = std.mem.indexOfScalar(u8, data, '(').?;
+    const space_idx = std.mem.lastIndexOfScalar(u8, data[0..open_paren_idx], ' ').? +% 1;
+    const name = data[space_idx..open_paren_idx];
+    return name;
+}
+
+fn getName(
+    data: []const u8,
+    prefix: []const u8,
+    suffix: []const u8,
+) []const u8 {
+    const eql_idx = std.mem.indexOfScalar(u8, data, '=').? -% 1;
+    const space_idx = std.mem.lastIndexOfScalar(u8, data[0..eql_idx], ' ').? +% 1;
+    const name = data[space_idx..eql_idx];
+
+    if (prefix.len > 0) {
+        if (std.mem.startsWith(u8, name, prefix)) {
+            const temp = name[prefix.len..];
+            name = std.mem.trimLeft(u8, temp, " ");
         }
     }
+
+    if (suffix.len > 0) {
+        if (std.mem.endsWith(u8, name, suffix)) {
+            const temp = name[0 .. name.len -% suffix.len];
+            name = temp;
+        }
+    }
+
+    return name;
+}
+
+fn getValue(data: []const u8) []const u8 {
+    const eql_idx = std.mem.indexOfScalar(u8, data, '=').? +% 2;
+    const semicolon_idx = std.mem.lastIndexOfScalar(u8, data, ';').?;
+    return data[eql_idx..semicolon_idx];
+}
+
+fn removeStrs(
+    data: []const u8,
+    prefixes: []const []const u8,
+    suffixes: []const []const u8,
+) []const u8 {
+    var new_data = data;
+    for (prefixes) |prefix| {
+        if (std.mem.startsWith(u8, new_data, prefix)) {
+            new_data = new_data[prefix.len..];
+        }
+    }
+    for (suffixes) |suffix| {
+        if (std.mem.endsWith(u8, new_data, suffix)) {
+            new_data = new_data[0 .. new_data.len -% suffix.len];
+        }
+    }
+    return new_data;
+}
+
+fn replaceVkStrs(allo: std.mem.Allocator, data: []const u8) ![]u8 {
+    var rdata = try allo.dupe(u8, data);
+    const vk_strs = [_][]const u8{ "vk", "Vk", "VK" };
+    const prefix_mods = [_][]const u8{ " ", "_", "]" };
+    const suffix_mods = [_][]const u8{ " ", "_", "[" };
+
+    for (vk_strs) |vk_str| {
+        for (prefix_mods) |prefix| {
+            const new_mod_str = try std.fmt.allocPrint(allo, "{s}{s}", .{ prefix, vk_str });
+            defer allo.free(new_mod_str);
+            if (std.mem.indexOf(u8, rdata, new_mod_str)) |_| {
+                const temp = try std.mem.replaceOwned(u8, allo, rdata, new_mod_str, " ");
+                allo.free(rdata);
+                rdata = temp;
+            }
+        }
+
+        for (suffix_mods) |suffix| {
+            const new_mod_str = try std.fmt.allocPrint(allo, "{s}{s}", .{ vk_str, suffix });
+            defer allo.free(new_mod_str);
+            if (std.mem.indexOf(u8, rdata, new_mod_str)) |_| {
+                const temp = try std.mem.replaceOwned(u8, allo, rdata, new_mod_str, " ");
+                allo.free(rdata);
+                rdata = temp;
+            }
+        }
+    }
+
     return rdata;
 }
 
-// fn replaceStdStrs(allo: std.mem.Allocator, data: []const u8) ![]u8 {
-//     var rdata = try allo.dupe(u8, data);
-// }
+fn convertArgs2Snake(allo: std.mem.Allocator, data: []const u8) ![]u8 {
+    // assumes new name >= old name
+    // assumes data is fn(a: b, c: d) result format
+    var rdata = try allo.dupe(u8, data);
+    var pos: usize = 0;
 
-fn removePrefixes(data: []const u8) []const u8 {
-    for ([_][]const u8{ "Vk", "Std", "VK_", "STD_" }) |start_str| {
-        if (std.mem.startsWith(u8, data, start_str)) {
-            return std.mem.trimLeft(u8, data, start_str);
-        }
-    } else return data;
-}
+    { // first
+        std.debug.print("Rdata: {s}\n", .{rdata});
+        const colon_idx = std.mem.indexOfScalar(u8, rdata, ':').?;
+        const open_paren_idx = std.mem.lastIndexOfScalar(u8, rdata[0..colon_idx], '(').? +% 1;
+        const old_name = rdata[open_paren_idx..colon_idx];
 
-fn replaceFlag(allo: std.mem.Allocator, data: []const u8) ![]u8 {
-    const pdata = removePrefixes(data);
-    const rdata = try allo.dupe(u8, pdata);
+        const new_name = try cc.convert(allo, old_name, .snake);
+        defer allo.free(new_name);
 
-    for ([_][]const u8{ "FlagBits2KR", "FlagBits2" }) |end_str| {
-        if (std.mem.endsWith(u8, rdata, end_str)) {
-            defer allo.free(rdata);
-            const temp = try std.mem.replaceOwned(u8, allo, rdata, end_str, "Flags2");
-            return temp;
-        }
+        const temp = try std.mem.replaceOwned(u8, allo, rdata, old_name, new_name);
+        allo.free(rdata);
+        rdata = temp;
+
+        pos = colon_idx +% 1 +% (new_name.len -% old_name.len);
     }
 
-    for ([_][]const u8{ "FlagBitsKH", "FlagBits" }) |end_str| {
-        if (std.mem.endsWith(u8, rdata, end_str)) {
-            defer allo.free(rdata);
-            const temp = try std.mem.replaceOwned(u8, allo, rdata, end_str, "Flags");
-            return temp;
-        }
+    while (std.mem.indexOfScalar(u8, rdata[pos..], ':')) |idx| {
+        const colon_idx = idx +% pos;
+        const space_idx = std.mem.lastIndexOfScalar(u8, rdata[0..colon_idx], ' ').? +% 1;
+        const old_name = rdata[space_idx..colon_idx];
+
+        const new_name = try cc.convert(allo, old_name, .snake);
+        defer allo.free(new_name);
+
+        const temp = try std.mem.replaceOwned(u8, allo, rdata, old_name, new_name);
+        allo.free(rdata);
+        rdata = temp;
+
+        pos = colon_idx +% 1 +% (new_name.len -% old_name.len);
     }
 
     return rdata;
