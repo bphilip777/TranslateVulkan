@@ -93,10 +93,10 @@ pub fn parse(self: *TextData) !void {
             .extension_name => try self.processExtensionName(start),
             .spec_version => try self.processSpecVersion(start),
             .type_name => try self.processTypeName(start),
-            // .pfn => start = (try self.processPFN(start)) +% 1,
-            // .import => start = (try self.processImport(start)) +% 1,
-            // .@"opaque" => start = (try self.processOpaque(start)) +% 1,
-            // .extern_struct_vk => start = (try self.processExternStructVk(start)) +% 1,
+            .pfn => try self.processPFN(start),
+            .import => try self.processImport(start),
+            .@"opaque" => start = (try self.processOpaque(start)) +% 1,
+            .extern_struct_vk => start = (try self.processExternStructVk(start)) +% 1,
             // .extern_struct => start = (try self.processExternStruct(start)) +% 1,
             // .enum1 => start = (try self.processEnum1(start)) +% 1,
             // .enum2 => start = (try self.processEnum2(start)) +% 1,
@@ -224,7 +224,7 @@ fn isSpecVersion(line: []const u8) bool {
 fn isTypeName(line: []const u8) bool {
     const name = getTrimName(line);
     const is_screaming_snake = cc.isCase(name, .screaming_snake);
-    const value = getFullValue(line, &.{}, &.{});
+    const value = getFullValue(line, &.{}, &.{}) orelse return false;
     const is_at = std.mem.startsWith(u8, value, "@as(");
     return is_screaming_snake and is_at;
 }
@@ -470,104 +470,57 @@ fn writeSpecVersions(self: *const TextData) !void {
     try self.write("};");
 }
 
-fn processPFN(self: *const TextData, idx: usize) !usize {
+fn processPFN(self: *const TextData, idx: usize) !void {
     const line = self.getPrevLine(idx);
-    const start = idx;
+    const new_line = try replaceVkStrs(self.allo, line);
+    defer self.allo.free(new_line);
+    try self.write(new_line);
+}
 
+fn processImport(self: *const TextData, idx: usize) !void {
+    const line = self.getPrevLine(idx);
+    try self.write(line);
+}
+
+fn processOpaque(self: *const TextData, idx: usize) !usize {
+    var line = self.getPrevLine(idx);
+    var start: usize = idx;
+    line = self.getNextLine(start);
+    start +%= line.len +% newline_chars.len;
     const name = getName(line, &.{}, &.{});
-    const new_name = try replaceVkStrs(self.allo, name);
-    defer self.allo.free(new_name);
-    std.debug.print("New Name: {s}\n", .{new_name});
-
-    // const prefix = "pub extern fn ";
-    // rline[prefix.len] = std.ascii.toLower(rline[prefix.len]);
-    //
-    // // change case
-    // var curr_idx = std.mem.indexOfScalar(u8, rline, '(').?;
-    // while (true) {
-    //     const colon_idx = std.mem.indexOfScalar(u8, rline[curr_idx..], ':') orelse break;
-    //     curr_idx +%= colon_idx +% 1;
-    //
-    //     const prev_space_idx = std.mem.lastIndexOfScalar(u8, rline[0..curr_idx], ' ') orelse 0;
-    //     const prev_paren_idx = std.mem.lastIndexOfScalar(u8, rline[0..curr_idx], '(') orelse 0;
-    //
-    //     const max_idx = @max(prev_space_idx, prev_paren_idx) +% 1;
-    //     const old_str = rline[max_idx .. curr_idx -% 1];
-    //     const new_str = try cc.convert(self.allo, old_str, .snake);
-    //     defer self.allo.free(new_str);
-    //
-    //     const temp = try std.mem.replaceOwned(u8, self.allo, rline, old_str, new_str);
-    //     self.allo.free(rline);
-    //     rline = temp;
-    // }
-    // try self.write(rline);
-
+    const new_line = try std.fmt.allocPrint(self.allo, "pub const {s} = enum(u64) {{ null=0, _ }};", .{name});
+    defer self.allo.free(new_line);
+    try self.write(new_line);
     return start;
 }
 
-// fn processImport(self: *const TextData, idx: usize) !usize {
-//     var start = idx;
-//     const line = self.getNextLine(start);
-//     start +%= line.len +% newline_chars.len;
-//     try self.write(line);
-//     return start;
-// }
-//
-// fn processOpaque(self: *const TextData, idx: usize) !usize {
-//     var start = idx;
-//     const line = self.getNextLine(start);
-//     start +%= line.len +% newline_chars.len;
-//     const line1 = self.getNextLine(start);
-//     start +%= line1.len +% newline_chars.len;
-//
-//     const prefix = "pub const ";
-//     const space_idx = std.mem.indexOfScalar(u8, line1[prefix.len..], ' ').?;
-//     const name = line1[prefix.len .. prefix.len +% space_idx];
-//
-//     const line2 = try std.fmt.allocPrint(self.allo, "pub const {s} = enum(u64){{ null=0, _ }};\n", .{name});
-//     defer self.allo.free(line2);
-//     try self.write(line2);
-//
-//     return start;
-// }
-//
-// fn processExternStructVk(self: *const TextData, idx: usize) !usize {
-//     var start = idx;
-//     { // title
-//         const line = self.getNextLine(start);
-//         start +%= line.len +% newline_chars.len;
-//
-//         const prefix = "pub const struct_Vk";
-//         const space_idx = std.mem.indexOfScalar(u8, line[prefix.len..], ' ').?;
-//         const new_name = line[prefix.len .. prefix.len +% space_idx];
-//
-//         const new_title = try std.fmt.allocPrint(
-//             self.allo,
-//             "pub const {s} = extern struct {{\n",
-//             .{new_name},
-//         );
-//         defer self.allo.free(new_title);
-//         try self.write(new_title);
-//     }
-//
-//     // body
-//     while (true) {
-//         const line = self.getNextLine(start);
-//         start +%= line.len +% newline_chars.len;
-//
-//         const rline = try replaceVkStrs(self.allo, line);
-//         defer self.allo.free(rline);
-//         try self.write(rline);
-//
-//         if (std.mem.eql(u8, line, "};")) break;
-//     }
-//
-//     // skip next line
-//     const line1 = self.getNextLine(start);
-//     start +%= line1.len +% newline_chars.len;
-//     return start;
-// }
-//
+fn processExternStructVk(self: *const TextData, idx: usize) !usize {
+    var start = idx;
+    var line = self.getPrevLine(start);
+    const name = getName(line, &.{"struct_Vk"}, &.{});
+    const title = try std.fmt.allocPrint(
+        self.allo,
+        "pub const {s} = extern struct {{",
+        .{name},
+    );
+    defer self.allo.free(title);
+    try self.write(title);
+
+    // body
+    while (true) {
+        line = self.getNextLine(start);
+        start +%= line.len +% newline_chars.len;
+        const rline = try replaceVkStrs(self.allo, line);
+        defer self.allo.free(rline);
+        try self.write(rline);
+        if (std.mem.eql(u8, line, "};")) break;
+    }
+
+    line = self.getNextLine(start);
+    start +%= line.len +% newline_chars.len;
+    return start;
+}
+
 // fn processExternStruct(self: *const TextData, idx: usize) !usize {
 //     var start = idx;
 //     { // title
@@ -968,9 +921,9 @@ fn getFullValue(
     data: []const u8,
     prefixes: []const []const u8,
     suffixes: []const []const u8,
-) []const u8 {
-    const start = std.mem.indexOfScalar(u8, data, '=').? +% 2;
-    const end = std.mem.indexOfScalar(u8, data, ';').?;
+) ?[]const u8 {
+    const start = (std.mem.indexOfScalar(u8, data, '=') orelse return null) +% 2;
+    const end = (std.mem.indexOfScalar(u8, data, ';') orelse return null);
     const value = data[start..end];
     const new_value = removeIxes(value, prefixes, suffixes);
     return new_value;
@@ -1021,15 +974,15 @@ fn removeIxes(
 fn replaceVkStrs(allo: std.mem.Allocator, data: []const u8) ![]u8 {
     var rdata = try allo.dupe(u8, data);
     const vk_strs = [_][]const u8{ "vk", "Vk", "VK" };
-    const prefix_mods = [_][]const u8{ " ", "_", "]" };
-    const suffix_mods = [_][]const u8{ " ", "_", "[" };
+    const prefix_mods = [_][]const u8{ "_", "]", " " };
+    const suffix_mods = [_][]const u8{ "_", "[", " " };
 
     for (vk_strs) |vk_str| {
         for (prefix_mods) |prefix| {
             const new_mod_str = try std.fmt.allocPrint(allo, "{s}{s}", .{ prefix, vk_str });
             defer allo.free(new_mod_str);
             if (std.mem.indexOf(u8, rdata, new_mod_str)) |_| {
-                const temp = try std.mem.replaceOwned(u8, allo, rdata, new_mod_str, " ");
+                const temp = try std.mem.replaceOwned(u8, allo, rdata, new_mod_str, prefix);
                 allo.free(rdata);
                 rdata = temp;
             }
@@ -1039,7 +992,7 @@ fn replaceVkStrs(allo: std.mem.Allocator, data: []const u8) ![]u8 {
             const new_mod_str = try std.fmt.allocPrint(allo, "{s}{s}", .{ vk_str, suffix });
             defer allo.free(new_mod_str);
             if (std.mem.indexOf(u8, rdata, new_mod_str)) |_| {
-                const temp = try std.mem.replaceOwned(u8, allo, rdata, new_mod_str, " ");
+                const temp = try std.mem.replaceOwned(u8, allo, rdata, new_mod_str, suffix);
                 allo.free(rdata);
                 rdata = temp;
             }
@@ -1053,6 +1006,7 @@ fn convertArgs2Snake(allo: std.mem.Allocator, data: []const u8) ![]u8 {
     // assumes new name >= old name
     // assumes data is fn(a: b, c: d) result format
     var rdata = try allo.dupe(u8, data);
+    std.debug.print("RData: {s}\n", .{rdata});
     var pos: usize = 0;
 
     { // first
