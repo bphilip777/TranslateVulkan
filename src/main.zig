@@ -22,7 +22,7 @@ pub fn main() !void {
         "extension_name",
         "spec_version",
         "type_name",
-        // "pfn",
+        "pfn",
         // "import",
         // "opaque",
         // "extern_struct_vk",

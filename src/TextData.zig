@@ -90,9 +90,9 @@ pub fn parse(self: *TextData) !void {
             .export_var => try self.processExportVar(start),
             .@"fn" => start = (try self.processFn(start)) +% 1,
 
-            .type_name => try self.processTypeName(start),
             .extension_name => try self.processExtensionName(start),
             .spec_version => try self.processSpecVersion(start),
+            .type_name => try self.processTypeName(start),
             // .pfn => start = (try self.processPFN(start)) +% 1,
             // .import => start = (try self.processImport(start)) +% 1,
             // .@"opaque" => start = (try self.processOpaque(start)) +% 1,
@@ -155,9 +155,9 @@ fn determineLineType(line: []const u8) ?LineType {
 
     if (!std.mem.startsWith(u8, line1, strs[1])) return null;
     const line2 = line1[strs[1].len +% 1 .. line1.len];
-    if (isTypeName(line2)) return .type_name;
     if (isExtensionName(line2)) return .extension_name;
     if (isSpecVersion(line2)) return .spec_version;
+    if (isTypeName(line2)) return .type_name;
     if (isPFN(line2)) return .pfn;
     if (isImport(line2)) return .import;
     if (isOpaque(line2)) return .@"opaque";
@@ -205,23 +205,10 @@ fn isExportVar(line: []const u8) bool {
 
 fn isSkip(line: []const u8) bool {
     const name = getTrimName(line);
-    // const name = getName(line, &.{}, &.{});
-
     const has_colon = name[name.len -% 1] == ':';
     const is_screaming_snake = cc.isCase(name[0 .. name.len -% 1], .screaming_snake);
     const vk_name = std.mem.startsWith(u8, line, "VK_");
-
     return has_colon and is_screaming_snake and vk_name;
-}
-
-fn isTypeName(line: []const u8) bool {
-    const name = getTrimName(line);
-    const is_screaming_snake = cc.isCase(name, .screaming_snake);
-
-    const value = getValue(line, &.{}, &.{});
-    const is_at = std.mem.startsWith(u8, value, "@as(");
-
-    return is_screaming_snake and is_at;
 }
 
 fn isExtensionName(line: []const u8) bool {
@@ -234,9 +221,16 @@ fn isSpecVersion(line: []const u8) bool {
     return std.mem.endsWith(u8, name, "_SPEC_VERSION");
 }
 
+fn isTypeName(line: []const u8) bool {
+    const name = getTrimName(line);
+    const is_screaming_snake = cc.isCase(name, .screaming_snake);
+    const value = getFullValue(line, &.{}, &.{});
+    const is_at = std.mem.startsWith(u8, value, "@as(");
+    return is_screaming_snake and is_at;
+}
+
 fn isPFN(line: []const u8) bool {
-    const fn_name = getFnName(line, &.{}, &.{});
-    return std.mem.startsWith(u8, fn_name, "PFN_vk");
+    return std.mem.startsWith(u8, line, "PFN_vk");
 }
 
 fn isImport(line: []const u8) bool {
@@ -288,71 +282,48 @@ fn processInlineFnVk(self: *const TextData, idx: usize) !usize {
         const line = self.getPrevLine(start);
         const fn_name = getFnName(line, &.{}, &.{});
         const trim_fn_name = removeIxes(fn_name, &.{"VK_"}, &.{});
-
         const camel_fn_name = try cc.convert(self.allo, trim_fn_name, .camel);
         defer self.allo.free(camel_fn_name);
-        // std.debug.print("Snake Fn Name: {s}\n", .{snake_fn_name});
-
-        // write new title line
         const newline = try std.mem.replaceOwned(u8, self.allo, line, fn_name, camel_fn_name);
         defer self.allo.free(newline);
         try self.write(newline);
-        // std.debug.print("New Line: {s}\n", .{newline});
     }
-
     while (true) {
         const line = self.getNextLine(start);
         start +%= line.len +% newline_chars.len;
         try self.write(line);
         if (std.mem.eql(u8, line, "}")) break;
     }
-
     return start;
 }
 
 fn processInlineFn(self: *const TextData, idx: usize) !usize {
     var start: usize = idx;
     var line = self.getPrevLine(start);
-    // std.debug.print("Line: {s}", .{line});
     try self.write(line);
-
     while (true) {
         line = self.getNextLine(start);
         start +%= line.len +% newline_chars.len;
         try self.write(line);
         if (std.mem.eql(u8, line, "}")) break;
     }
-
     return start;
 }
 
 fn processExternFnVk(self: *const TextData, idx: usize) !usize {
     var start = idx;
     const line = self.getPrevLine(start);
-    // std.debug.print("Line: {s}\n", .{line});
     start +%= line.len +% newline_chars.len;
-
     const fn_name = getFnName(line, &.{"vk"}, &.{});
-    // std.debug.print("Fn Name: {s}\n", .{fn_name});
-
     const camel_fn_name = try cc.convert(self.allo, fn_name, .camel);
     defer self.allo.free(camel_fn_name);
-    // std.debug.print("Camel Fn Name: {s}\n", .{camel_fn_name});
-
     const replace_fn_name = try std.mem.replaceOwned(u8, self.allo, line, fn_name, camel_fn_name);
     defer self.allo.free(replace_fn_name);
-    // std.debug.print("Replace Fn Name: {s}\n", .{replace_fn_name});
-
     const new_fn_line = try replaceVkStrs(self.allo, replace_fn_name);
     defer self.allo.free(new_fn_line);
-    // std.debug.print("New Fn Line: {s}\n", .{new_fn_line});
-
     const new_line = try convertArgs2Snake(self.allo, new_fn_line);
     defer self.allo.free(new_line);
-    // std.debug.print("New Line: {s}\n", .{new_line});
-
     try self.write(new_line);
-
     return start;
 }
 
@@ -362,19 +333,16 @@ fn processExternFn(self: *const TextData, idx: usize) !void {
 }
 
 fn processExternVar(self: *const TextData, idx: usize) !void {
-    // TODO: write line as is, but needs to import data at top: const DWORD = std.os.windows.DWORD;
     const line = self.getPrevLine(idx);
     try self.write(line);
 }
 
 fn processExternConst(self: *const TextData, idx: usize) !void {
-    // TODO: write line as is, but needs to import data at top: const DWORD = std.os.windows.DWORD;
     const line = self.getPrevLine(idx);
     try self.write(line);
 }
 
 fn processExportVar(self: *const TextData, idx: usize) !void {
-    // TODO: write line as is, but need to import data at top;
     const line = self.getPrevLine(idx);
     try self.write(line);
 }
@@ -382,7 +350,6 @@ fn processExportVar(self: *const TextData, idx: usize) !void {
 fn processFn(self: *const TextData, idx: usize) !usize {
     var line = self.getPrevLine(idx);
     try self.write(line);
-
     var start: usize = idx;
     while (true) {
         line = self.getNextLine(start);
@@ -390,38 +357,23 @@ fn processFn(self: *const TextData, idx: usize) !usize {
         try self.write(line);
         if (std.mem.eql(u8, line, "}")) break;
     }
-
     return start;
 }
 
 fn processTypeName(self: *TextData, idx: usize) !void {
     const line = self.getPrevLine(idx);
-
     const name = getName(line, &.{"VK_"}, &.{});
-    // std.debug.print("Name: {s}\n", .{name});
-
     const snake_name = try cc.convert(self.allo, name, .snake);
     defer self.allo.free(snake_name);
-    // std.debug.print("Snake Name: {s}\n", .{snake_name});
-
     const trim_vk_prefix = try replaceVkStrs(self.allo, snake_name);
     defer self.allo.free(trim_vk_prefix);
-    // std.debug.print("Trim Prefix: {s}\n", .{trim_vk_prefix});
-
     const type_name = if (std.mem.eql(u8, getType(line, &.{}, &.{}), "c_uint")) "u32" else "i32";
-    // std.debug.print("Type Name: {s}\n", .{type_name});
-
     const new_field_name = try std.fmt.allocPrint(
         self.allo,
         "{s}: {s}",
         .{ trim_vk_prefix, type_name },
     );
-    // defer self.allo.free(new_field_name);
-    std.debug.print("New Field Name: {s}\n", .{new_field_name});
-
     const new_field_value = try self.allo.dupe(u8, getValue(line, &.{}, &.{}));
-    // defer self.allo.free(new_field_value);
-    std.debug.print("New Field Value: {s}\n", .{new_field_value});
 
     try self.type_names.append(.{
         .name = new_field_name,
@@ -518,39 +470,41 @@ fn writeSpecVersions(self: *const TextData) !void {
     try self.write("};");
 }
 
-// fn processPFN(self: *const TextData, idx: usize) !usize {
-//     var start = idx;
-//     const line = self.getNextLine(start);
-//     start +%= line.len +% newline_chars.len;
-//
-//     var rline = try replaceVkStrs(self.allo, line);
-//     defer self.allo.free(rline);
-//     const prefix = "pub extern fn ";
-//     rline[prefix.len] = std.ascii.toLower(rline[prefix.len]);
-//
-//     // change case
-//     var curr_idx = std.mem.indexOfScalar(u8, rline, '(').?;
-//     while (true) {
-//         const colon_idx = std.mem.indexOfScalar(u8, rline[curr_idx..], ':') orelse break;
-//         curr_idx +%= colon_idx +% 1;
-//
-//         const prev_space_idx = std.mem.lastIndexOfScalar(u8, rline[0..curr_idx], ' ') orelse 0;
-//         const prev_paren_idx = std.mem.lastIndexOfScalar(u8, rline[0..curr_idx], '(') orelse 0;
-//
-//         const max_idx = @max(prev_space_idx, prev_paren_idx) +% 1;
-//         const old_str = rline[max_idx .. curr_idx -% 1];
-//         const new_str = try cc.convert(self.allo, old_str, .snake);
-//         defer self.allo.free(new_str);
-//
-//         const temp = try std.mem.replaceOwned(u8, self.allo, rline, old_str, new_str);
-//         self.allo.free(rline);
-//         rline = temp;
-//     }
-//     try self.write(rline);
-//
-//     return start;
-// }
-//
+fn processPFN(self: *const TextData, idx: usize) !usize {
+    const line = self.getPrevLine(idx);
+    const start = idx;
+
+    const name = getName(line, &.{}, &.{});
+    const new_name = try replaceVkStrs(self.allo, name);
+    defer self.allo.free(new_name);
+    std.debug.print("New Name: {s}\n", .{new_name});
+
+    // const prefix = "pub extern fn ";
+    // rline[prefix.len] = std.ascii.toLower(rline[prefix.len]);
+    //
+    // // change case
+    // var curr_idx = std.mem.indexOfScalar(u8, rline, '(').?;
+    // while (true) {
+    //     const colon_idx = std.mem.indexOfScalar(u8, rline[curr_idx..], ':') orelse break;
+    //     curr_idx +%= colon_idx +% 1;
+    //
+    //     const prev_space_idx = std.mem.lastIndexOfScalar(u8, rline[0..curr_idx], ' ') orelse 0;
+    //     const prev_paren_idx = std.mem.lastIndexOfScalar(u8, rline[0..curr_idx], '(') orelse 0;
+    //
+    //     const max_idx = @max(prev_space_idx, prev_paren_idx) +% 1;
+    //     const old_str = rline[max_idx .. curr_idx -% 1];
+    //     const new_str = try cc.convert(self.allo, old_str, .snake);
+    //     defer self.allo.free(new_str);
+    //
+    //     const temp = try std.mem.replaceOwned(u8, self.allo, rline, old_str, new_str);
+    //     self.allo.free(rline);
+    //     rline = temp;
+    // }
+    // try self.write(rline);
+
+    return start;
+}
+
 // fn processImport(self: *const TextData, idx: usize) !usize {
 //     var start = idx;
 //     const line = self.getNextLine(start);
