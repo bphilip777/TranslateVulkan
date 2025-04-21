@@ -378,7 +378,7 @@ fn processTypeName(self: *TextData, idx: usize) !void {
     defer self.allo.free(snake_name);
     const trim_vk_prefix = try replaceVkStrs(self.allo, snake_name);
     defer self.allo.free(trim_vk_prefix);
-    const type_name = if (std.mem.eql(u8, getType(line, &.{}, &.{}), "c_uint")) "u32" else "i32";
+    const type_name = if (std.mem.eql(u8, getType(line, &.{}, &.{}).?, "c_uint")) "u32" else "i32";
     const new_field_name = try std.fmt.allocPrint(
         self.allo,
         "{s}: {s}",
@@ -427,11 +427,15 @@ fn writeExtensionNames(self: *const TextData) !void {
 }
 
 fn processSpecVersion(self: *TextData, idx: usize) !void {
+    // lots of edge cases
     const line = self.getPrevLine(idx);
     const name = getName(line, &.{ "VK_KHR_", "VK_" }, &.{"_SPEC_VERSION"});
-    const snake_name = try cc.convert(self.allo, name, .snake);
+    const snake_name = cc.convert(self.allo, name, .snake) catch |err| {
+        std.debug.print("Name: {s}\n", .{name});
+        return err;
+    };
     defer self.allo.free(snake_name);
-    const tname = getType(line, &.{}, &.{});
+    const tname = getType(line, &.{}, &.{}) orelse return;
     const type_name = if (std.mem.eql(u8, tname, "c_uint")) "u32" else "i32";
     const new_field_name = try std.fmt.allocPrint(
         self.allo,
@@ -937,9 +941,9 @@ fn getType(
     data: []const u8,
     prefixes: []const []const u8,
     suffixes: []const []const u8,
-) []const u8 {
+) ?[]const u8 {
     // assumes @as(); on value side, not a fn input
-    const comma_idx = std.mem.lastIndexOfScalar(u8, data, ',').?;
+    const comma_idx = std.mem.lastIndexOfScalar(u8, data, ',') orelse return null;
     const open_paren_idx = std.mem.lastIndexOfScalar(u8, data[0..comma_idx], '(').? +% 1;
     const vk_type = data[open_paren_idx..comma_idx];
     const new_vk_type = removeIxes(vk_type, prefixes, suffixes);
@@ -1010,7 +1014,6 @@ fn convertArgs2Snake(allo: std.mem.Allocator, data: []const u8) ![]u8 {
     // assumes new name >= old name
     // assumes data is fn(a: b, c: d) result format
     var rdata = try allo.dupe(u8, data);
-    std.debug.print("RData: {s}\n", .{rdata});
     var pos: usize = 0;
 
     { // first
@@ -1033,7 +1036,10 @@ fn convertArgs2Snake(allo: std.mem.Allocator, data: []const u8) ![]u8 {
         const space_idx = std.mem.lastIndexOfScalar(u8, rdata[0..colon_idx], ' ').? +% 1;
         const old_name = rdata[space_idx..colon_idx];
 
-        const new_name = try cc.convert(allo, old_name, .snake);
+        const new_name = cc.convert(allo, old_name, .snake) catch {
+            pos = colon_idx +% 1 +% old_name.len;
+            continue;
+        };
         defer allo.free(new_name);
 
         const temp = try std.mem.replaceOwned(u8, allo, rdata, old_name, new_name);
