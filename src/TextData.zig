@@ -113,8 +113,9 @@ pub fn parse(self: *TextData) !void {
             .extern_union => start = (try self.processExternUnion(start)),
             .extern_struct_vk => start = (try self.processExternStructVk(start)),
             .extern_struct => start = (try self.processExternStruct(start)),
-            .enum1 => start = (try self.processEnum1(start)),
-            .enum2 => start = (try self.processEnum2(start)),
+            .@"enum" => start = (try self.processEnum(start)),
+            .flag1 => start = (try self.processFlag1(start)),
+            .flag2 => start = (try self.processFlag2(start)),
             .type_vk => try self.processTypeVk(start),
             .type => try self.processType(start),
 
@@ -149,8 +150,9 @@ const LineType = enum {
     extern_union,
     extern_struct_vk,
     extern_struct,
-    enum1,
-    enum2,
+    @"enum",
+    flag1,
+    flag2,
     type_vk,
     type,
 
@@ -195,8 +197,9 @@ fn determineLineType(line: []const u8) ?LineType {
     if (isExternStructVk(line2)) return .extern_struct_vk;
     if (isExternStruct(line2)) return .extern_struct;
     if (isSkip(line2)) return null;
-    if (isEnum1(line2)) return .enum1;
-    if (isEnum2(line2)) return .enum2;
+    if (isEnum(line2)) return .@"enum";
+    if (isFlag1(line2)) return .flag1;
+    if (isFlag2(line2)) return .flag2;
     if (isTypeVk(line2)) return .type_vk;
     if (isType(line2)) return .type;
     return .base;
@@ -314,17 +317,24 @@ fn isExternStruct(line: []const u8) bool {
     return endsWith(u8, new_line, "extern struct {");
 }
 
-fn isEnum1(line: []const u8) bool {
-    return startsWith(u8, line, "enum_Vk");
+fn isFlag1(line: []const u8) bool {
+    const space_idx = indexOfScalar(u8, line, ' ').?;
+    const name = line[0..space_idx];
+    const is_enum = isEnum(line);
+    const is_flag1 = endsWith(u8, name, "FlagBitsKHR") or endsWith(u8, name, "FlagBits");
+    return is_enum and is_flag1;
 }
 
-fn isEnum2(line: []const u8) bool {
-    const new_line = trimLineEnd(line);
-    const eql_idx = (indexOfScalar(u8, new_line, '=') orelse return false) -% 1;
-    const name = new_line[0..eql_idx];
-    const is_ver_2 = endsWith(u8, name, "2");
-    const is_flag_ver_2 = endsWith(u8, new_line, "VkFlags64;");
-    return is_ver_2 and is_flag_ver_2;
+fn isFlag2(line: []const u8) bool {
+    const space_idx = indexOfScalar(u8, line, ' ').?;
+    const name = line[0..space_idx];
+    const is_enum = isEnum(line);
+    const is_flag2 = endsWith(u8, name, "FlagBitsKHR2") or endsWith(u8, name, "FlagBits2");
+    return is_enum and is_flag2;
+}
+
+fn isEnum(line: []const u8) bool {
+    return startsWith(u8, line, "enum_Vk");
 }
 
 fn isTypeVk(line: []const u8) bool {
@@ -353,6 +363,8 @@ fn isType(line: []const u8) bool {
         .{ "c_uint", {} },
         .{ "c_ulong", {} },
         .{ "c_ulonglong", {} },
+        .{ "VkFlags", {} },
+        .{ "VkFlags64", {} },
     });
     const start = (indexOfScalar(u8, line, '=') orelse return false) +% 2;
     const end = lastIndexOfScalar(u8, line, ';') orelse return false;
@@ -487,22 +499,7 @@ fn writeTypeNames(self: *const TextData) !void {
 
 fn processExtensionName(self: *TextData, idx: usize) !void {
     const line = self.getPrevLine(idx);
-    const name = getName(line, &.{
-        "VK_KHR_",
-        "VK_STD_",
-        "VK_NV_",
-        "VK_EXT_",
-        "VK_IMG_",
-        "VK_NVX_",
-        "VK_AMD_",
-        "VK_GOOGLE_",
-        "VK_ARM_",
-        "VK_QCOM_",
-        "VK_LUNARG_",
-        "VK_MSFT_",
-        "VK_MESA_",
-        "VK_HUAWEI_",
-    }, &.{"_EXTENSION_NAME"});
+    const name = getName(line, &.{"VK_"}, &.{"_EXTENSION_NAME"});
     const field_name = try cc.convert(self.allo, name, .snake);
     defer self.allo.free(field_name);
     const new_field_name = try prefixWithAt(self.allo, field_name);
@@ -738,7 +735,14 @@ fn processExternStruct(self: *const TextData, idx: usize) !usize {
     return start;
 }
 
-fn processEnum1(self: *const TextData, idx: usize) !usize {
+fn processEnum(self: *const TextData, idx: usize) !usize {
+    const prev_line = self.getPrevLine(idx);
+    std.debug.print("Prev Line: {s}\n", .{prev_line});
+    const start = self.getNextStart(idx);
+    return start;
+}
+
+fn processFlag1(self: *const TextData, idx: usize) !usize {
     const prev_line = self.getPrevLine(idx);
     var line = prev_line;
 
@@ -871,7 +875,7 @@ fn processEnum1(self: *const TextData, idx: usize) !usize {
     return start;
 }
 
-fn processEnum2(self: *const TextData, idx: usize) !usize {
+fn processFlag2(self: *const TextData, idx: usize) !usize {
     var line = self.getPrevLine(idx);
     var start = self.getNextStart(idx);
 

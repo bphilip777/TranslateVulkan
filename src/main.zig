@@ -15,7 +15,7 @@ pub fn main() !void {
 }
 
 // TODO: how to fix this
-// pub const VkDeviceCreateFlags = VkFlags;
+// pub const VkDeviceCreateFlags = VkFlags; // maybe throw in type?
 
 // pub fn main() !void {
 //     var da = std.heap.DebugAllocator(.{}){};
