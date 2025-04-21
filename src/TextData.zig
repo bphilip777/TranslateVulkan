@@ -141,7 +141,6 @@ const LineType = enum {
     export_var,
     @"fn",
 
-    compile_error,
     extension_name,
     spec_version,
     type_name,
@@ -163,23 +162,25 @@ const LineType = enum {
 fn determineLineType(line: []const u8) ?LineType {
     const strs = [_][]const u8{ "pub", "const" };
 
-    if (startsWith(u8, line, strs[1])) {
-        const line1 = line[strs[1].len +% 1 .. line.len];
+    var line1: []const u8 = undefined;
+    if (startsWith(u8, line, strs[0])) {
+        line1 = line[strs[0].len +% 1 .. line.len];
+        if (isInlineFnVk(line1)) return .inline_fn_vk;
+        if (isInlineFn(line1)) return .inline_fn;
+        if (isExtern(line1)) return .@"extern";
+        if (isExternFnVk(line1)) return .extern_fn_vk;
+        if (isExternFn(line1)) return .extern_fn;
+        if (isExternVar(line1)) return .extern_var;
+        if (isFn(line1)) return .@"fn";
+        if (isExternConst(line1)) return .extern_const;
+        if (isExportVar(line1)) return .export_var;
+    } else if (startsWith(u8, line, strs[1])) {
+        line1 = line[strs[1].len +% 1 .. line.len];
         if (isExternUnion(line1)) return .extern_union;
         return null;
+    } else {
+        return null;
     }
-
-    if (!startsWith(u8, line, strs[0])) return null;
-    const line1 = line[strs[0].len +% 1 .. line.len];
-    if (isInlineFnVk(line1)) return .inline_fn_vk;
-    if (isInlineFn(line1)) return .inline_fn;
-    if (isExtern(line1)) return .@"extern";
-    if (isExternFnVk(line1)) return .extern_fn_vk;
-    if (isExternFn(line1)) return .extern_fn;
-    if (isExternVar(line1)) return .extern_var;
-    if (isFn(line1)) return .@"fn";
-    if (isExternConst(line1)) return .extern_const;
-    if (isExportVar(line1)) return .export_var;
 
     if (!startsWith(u8, line1, strs[1])) return null;
     const line2 = line1[strs[1].len +% 1 .. line1.len];
