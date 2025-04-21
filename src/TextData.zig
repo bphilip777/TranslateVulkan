@@ -602,6 +602,7 @@ fn processEnum1(self: *const TextData, idx: usize) !usize {
     var curr = self.getPrevStart(idx);
     while (curr > 0) {
         line = self.getPrevLine(curr);
+        std.debug.print("Line: {s}\n", .{line});
         curr = self.getPrevStart(curr);
         const ssn = getScreamingSnakeName(line, &.{"VK_"}, &.{}) orelse break;
 
@@ -644,7 +645,8 @@ fn processEnum1(self: *const TextData, idx: usize) !usize {
         }
 
         if (unique_values.get(new_field_value)) |fil| {
-            if (fields.items[fil].name.len > new_field_name.len) {
+            const old_field_name = fields.items[fil].name;
+            if (old_field_name.len > new_field_name.len) {
                 self.allo.free(fields.items[fil].name);
                 fields.items[fil].name = new_field_name;
             } else {
