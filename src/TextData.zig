@@ -553,7 +553,6 @@ fn processEnum1(self: *const TextData, idx: usize) !usize {
 
     line = self.getNextLine(idx);
     var start = self.getNextStart(idx);
-    const found_name = getName(line, &.{}, &.{});
     const title_name = getName(line, &.{"Vk"}, &.{ "FlagBitsKHR", "FlagBits" });
     const title_line = try std.fmt.allocPrint(
         self.allo,
@@ -563,7 +562,8 @@ fn processEnum1(self: *const TextData, idx: usize) !usize {
     defer self.allo.free(title_line);
     try self.write(title_line);
 
-    var title_words = try cc.split2Words(self.allo, found_name);
+    const name = getName(line, &.{"Vk"}, &.{});
+    var title_words = try cc.split2Words(self.allo, name);
     defer title_words.deinit();
     defer for (title_words.items) |title_word| self.allo.free(title_word);
 
@@ -587,7 +587,7 @@ fn processEnum1(self: *const TextData, idx: usize) !usize {
     while (curr > 0) {
         line = self.getPrevLine(curr);
         curr = self.getPrevStart(curr);
-        const ssn = getScreamingSnakeName(line, &.{}, &.{}) orelse break;
+        const ssn = getScreamingSnakeName(line, &.{"VK_"}, &.{}) orelse break;
 
         const new_name = try cc.convert(self.allo, ssn, .snake);
         defer self.allo.free(new_name);
@@ -693,8 +693,7 @@ fn processEnum2(self: *const TextData, idx: usize) !usize {
     defer self.allo.free(title_line);
     try self.write(title_line);
 
-    const name = getName(line, &.{}, &.{});
-    var title_words = try cc.split2Words(self.allo, name);
+    var title_words = try cc.split2Words(self.allo, title_name);
     defer title_words.deinit();
     for (title_words.items, 0..) |*title_word, i| {
         const word = title_word.*;
@@ -732,7 +731,7 @@ fn processEnum2(self: *const TextData, idx: usize) !usize {
     while (true) {
         line = self.getNextLine(start);
         start = self.getNextStart(start);
-        const ssn = getScreamingSnakeName(line, &.{}, &.{}) orelse break;
+        const ssn = getScreamingSnakeName(line, &.{"VK_"}, &.{}) orelse break;
 
         var name_words = try cc.split2Words(self.allo, ssn);
         defer name_words.deinit();
@@ -740,7 +739,11 @@ fn processEnum2(self: *const TextData, idx: usize) !usize {
 
         const matches = try getMatches(self.allo, name_words, title_words);
         defer self.allo.free(matches);
+
+        std.debug.print("SSN: {s}\n", .{ssn});
         if (!anyMatches(matches)) break;
+        std.debug.print("SSN: {s}\n", .{ssn});
+
         for (0..matches.len) |i| {
             const j = matches.len -% i -% 1;
             if (!matches[j]) continue;
@@ -800,7 +803,6 @@ fn processEnum2(self: *const TextData, idx: usize) !usize {
         defer self.allo.free(newline);
         try self.write(newline);
     }
-
     try self.write("};");
 
     return start;
