@@ -38,12 +38,13 @@ pub fn main() !void {
         // "pfn",
         // "import",
         // "opaque",
+        // "opaque_vk",
         // "extern_struct_vk",
         // "extern_struct",
-        // "enum1",
+        "enum1",
         // "enum2",
         // "type",
-        "all",
+        // "all",
     };
 
     for (filepaths) |filepath| {
@@ -80,6 +81,7 @@ test "Parse different text files" {
         "type_name",
         "pfn",
         "import",
+        "opaque_vk",
         "opaque",
         "extern_struct_vk",
         "extern_struct",

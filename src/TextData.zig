@@ -97,7 +97,8 @@ pub fn parse(self: *TextData) !void {
             .type_name => try self.processTypeName(start),
             .pfn => try self.processPFN(start),
             .import => try self.processImport(start),
-            .@"opaque" => start = (try self.processOpaque(start)),
+            .opaque_vk => start = (try self.processOpaqueVk(start)),
+            .@"opaque" => try self.processOpaque(start),
             .extern_struct_vk => start = (try self.processExternStructVk(start)),
             .extern_struct => start = (try self.processExternStruct(start)),
             .enum1 => start = (try self.processEnum1(start)),
@@ -129,6 +130,7 @@ const LineType = enum {
     spec_version,
     pfn,
     import,
+    opaque_vk,
     @"opaque",
     extern_struct_vk,
     extern_struct,
@@ -161,6 +163,7 @@ fn determineLineType(line: []const u8) ?LineType {
     if (isTypeName(line2)) return .type_name;
     if (isPFN(line2)) return .pfn;
     if (isImport(line2)) return .import;
+    if (isOpaqueVk(line2)) return .opaque_vk;
     if (isOpaque(line2)) return .@"opaque";
     if (isExternStructVk(line2)) return .extern_struct_vk;
     if (isExternStruct(line2)) return .extern_struct;
@@ -236,6 +239,13 @@ fn isPFN(line: []const u8) bool {
 
 fn isImport(line: []const u8) bool {
     return std.mem.indexOf(u8, line, "@import") != null;
+}
+
+fn isOpaqueVk(line: []const u8) bool {
+    const name = getName(line, &.{}, &.{});
+    const is_vk = std.mem.startsWith(u8, name, "struct_Vk");
+    const is_opaque = isOpaque(line);
+    return is_vk and is_opaque;
 }
 
 fn isOpaque(line: []const u8) bool {
@@ -461,9 +471,10 @@ fn processImport(self: *const TextData, idx: usize) !void {
     try self.write(line);
 }
 
-fn processOpaque(self: *const TextData, idx: usize) !usize {
-    var line = self.getPrevLine(idx);
-    line = self.getNextLine(idx);
+fn processOpaqueVk(self: *const TextData, idx: usize) !usize {
+    const line = self.getNextLine(idx);
+    std.debug.print("Line: {s}\n", .{line});
+
     const start = self.getNextStart(idx);
     const name = getName(line, &.{"Vk"}, &.{});
     const new_line = try std.fmt.allocPrint(
@@ -474,6 +485,11 @@ fn processOpaque(self: *const TextData, idx: usize) !usize {
     defer self.allo.free(new_line);
     try self.write(new_line);
     return start;
+}
+
+fn processOpaque(self: *const TextData, idx: usize) !void {
+    const line = self.getPrevLine(idx);
+    try self.write(line);
 }
 
 fn processExternStructVk(self: *const TextData, idx: usize) !usize {
@@ -675,7 +691,11 @@ fn processEnum1(self: *const TextData, idx: usize) !usize {
     }
     try self.write("};");
 
-    start = self.getNextStart(start);
+    {
+        line = self.getNextLine(start);
+        const new_name = getName(line, &.{}, &.{});
+        if (std.mem.endsWith(u8, new_name, name)) start = self.getNextStart(start);
+    }
     return start;
 }
 
@@ -857,8 +877,9 @@ fn getName(
     suffixes: []const []const u8,
 ) []const u8 {
     const eql_idx = std.mem.indexOfScalar(u8, data, '=').? -% 1;
-    const space_idx = std.mem.lastIndexOfScalar(u8, data[0..eql_idx], ' ').? +% 1;
-    const name = data[space_idx..eql_idx];
+    const space_idx = std.mem.lastIndexOfScalar(u8, data[0..eql_idx], ' ');
+    const start = if (space_idx) |si| si +% 1 else 0;
+    const name = data[start..eql_idx];
     const new_name = removeIxes(name, prefixes, suffixes);
     return new_name;
 }
