@@ -24,7 +24,7 @@ pub fn main() !void {
     const ext = ".zig";
 
     const filepaths = [_][]const u8{
-        // "inline_fn_vk",
+        "inline_fn_vk",
         // "inline_fn",
         // "extern",
         // "extern_fn_vk",
@@ -74,6 +74,7 @@ test "Parse different text files" {
     const filepaths = [_][]const u8{
         "inline_fn_vk",
         "inline_fn",
+        "extern",
         "extern_fn_vk",
         "extern_fn",
         "extern_var",
@@ -85,13 +86,17 @@ test "Parse different text files" {
         "type_name",
         "pfn",
         "import",
-        "opaque_vk",
         "opaque",
+        "opaque_vk",
+        "extern_union_vk",
+        "extern_union",
         "extern_struct_vk",
         "extern_struct",
-        "enum1",
-        "enum2",
+        "flag1",
+        "flag2",
         "type",
+        "unknown",
+        "all",
     };
 
     for (filepaths) |filepath| {
