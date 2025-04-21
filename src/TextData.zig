@@ -647,6 +647,7 @@ fn processEnum1(self: *const TextData, idx: usize) !usize {
         if (unique_values.get(new_field_value)) |fil| {
             const old_field_name = fields.items[fil].name;
             if (old_field_name.len > new_field_name.len) {
+                _ = unique_names.remove(old_field_name);
                 self.allo.free(fields.items[fil].name);
                 fields.items[fil].name = new_field_name;
             } else {
@@ -693,11 +694,12 @@ fn processEnum1(self: *const TextData, idx: usize) !usize {
     }
     try self.write("};");
 
-    {
-        line = self.getNextLine(start);
-        const new_name = getName(line, &.{}, &.{});
-        if (std.mem.endsWith(u8, new_name, name)) start = self.getNextStart(start);
+    line = self.getNextLine(start);
+    const new_name = getName(line, &.{"Vk"}, &.{"Flags"});
+    if (std.mem.eql(u8, new_name, title_name)) {
+        start = self.getNextStart(start);
     }
+
     return start;
 }
 
@@ -797,7 +799,9 @@ fn processEnum2(self: *const TextData, idx: usize) !usize {
         }
 
         if (unique_values.get(new_field_value)) |fil| {
-            if (fields.items[fil].name.len > new_field_name.len) {
+            const old_field_name = fields.items[fil].name;
+            if (old_field_name.len > new_field_name.len) {
+                _ = unique_names.remove(old_field_name);
                 self.allo.free(fields.items[fil].name);
                 fields.items[fil].name = new_field_name;
             } else {
