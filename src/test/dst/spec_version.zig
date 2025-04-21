@@ -1,3 +1,3 @@
-pub const SpecVersion = struct {
+pub const SpecVersions = struct {
 surface:i32 = 25,
 };

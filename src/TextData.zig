@@ -515,7 +515,7 @@ fn writeExtensionNames(self: *const TextData) !void {
     for (self.extension_names.items) |en| {
         const newline = try allocPrint(
             self.allo,
-            "{s}:{s},",
+            "    {s}:{s},",
             .{ en.name, en.value },
         );
         defer self.allo.free(newline);
@@ -571,7 +571,7 @@ fn writeSpecVersions(self: *const TextData) !void {
     for (self.spec_versions.items) |sv| {
         const newline = try allocPrint(
             self.allo,
-            "{s} = {s},",
+            "    {s} = {s},",
             .{ sv.name, sv.value },
         );
         defer self.allo.free(newline);

@@ -1,3 +1,3 @@
-pub const TypeName = struct {
-    uuid_size: u32 = 16,
+pub const TypeNames = struct {
+uuid_size: u32 = 16,
 };

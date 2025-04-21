@@ -1,3 +1,3 @@
 pub const ExtensionNames = struct {
-    surface: "VK_KHR_surface",
+    khr_surface: "VK_KHR_surface",
 };
