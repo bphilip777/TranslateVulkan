@@ -26,7 +26,7 @@ pub fn main() !void {
     const filepaths = [_][]const u8{
         // "inline_fn_vk",
         // "inline_fn",
-        "extern",
+        // "extern",
         // "extern_fn_vk",
         // "extern_fn",
         // "extern_var",
@@ -41,7 +41,7 @@ pub fn main() !void {
         // "opaque",
         // "opaque_vk",
         // "extern_struct_vk",
-        // "extern_struct",
+        "extern_struct",
         // "enum1",
         // "enum2",
         // "type",

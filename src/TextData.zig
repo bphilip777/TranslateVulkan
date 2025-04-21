@@ -539,11 +539,16 @@ fn processExternStructVk(self: *const TextData, idx: usize) !usize {
         if (std.mem.indexOfScalar(u8, line, ':')) |colon_idx| {
             const space_idx = std.mem.lastIndexOfScalar(u8, line[0..colon_idx], ' ').? +% 1;
             const field_name = line[space_idx..colon_idx];
-            const new_field_name = cc.convert(self.allo, field_name, .snake) catch {
+            var new_field_name = cc.convert(self.allo, field_name, .snake) catch {
                 try self.write(line);
                 continue;
             };
             defer self.allo.free(new_field_name);
+            if (isKeyword(new_field_name) or std.ascii.isDigit(new_field_name[0])) {
+                const tmp = try std.fmt.allocPrint(self.allo, "_{s}", .{new_field_name});
+                self.allo.free(new_field_name);
+                new_field_name = tmp;
+            }
             const new_line = try std.mem.replaceOwned(u8, self.allo, line, field_name, new_field_name);
             defer self.allo.free(new_line);
             try self.write(new_line);
@@ -569,10 +574,15 @@ fn processExternStruct(self: *const TextData, idx: usize) !usize {
         if (std.mem.indexOfScalar(u8, line, ':')) |colon_idx| {
             const space_idx = std.mem.lastIndexOfScalar(u8, line[0..colon_idx], ' ').? +% 1;
             const field_name = line[space_idx..colon_idx];
-            const new_field_name = cc.convert(self.allo, field_name, .snake) catch {
+            var new_field_name = cc.convert(self.allo, field_name, .snake) catch {
                 try self.write(line);
                 continue;
             };
+            if (isKeyword(new_field_name) or std.ascii.isDigit(new_field_name[0])) {
+                const tmp = try std.fmt.allocPrint(self.allo, "_{s}", .{new_field_name});
+                self.allo.free(new_field_name);
+                new_field_name = tmp;
+            }
             defer self.allo.free(new_field_name);
             const new_line = try std.mem.replaceOwned(u8, self.allo, line, field_name, new_field_name);
             defer self.allo.free(new_line);
