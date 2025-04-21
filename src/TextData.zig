@@ -586,6 +586,7 @@ fn processExternUnionVk(self: *const TextData, idx: usize) !usize {
     var line = self.getPrevLine(idx);
     const name = getName(line, &.{"union_Vk"}, &.{});
     const title = try allocPrint(self.allo, "pub const {s} = extern union {{", .{name});
+    defer self.allo.free(title);
     try self.write(title);
 
     var start: usize = idx;
@@ -595,6 +596,11 @@ fn processExternUnionVk(self: *const TextData, idx: usize) !usize {
         try self.write(line);
         if (eql(u8, line, "};")) break;
     }
+
+    line = self.getNextLine(start);
+    const new_name = getName(line, &.{"Vk"}, &.{});
+    if (eql(u8, name, new_name)) start = self.getNextStart(start);
+
     return start;
 }
 
@@ -609,6 +615,7 @@ fn processExternUnion(self: *const TextData, idx: usize) !usize {
         try self.write(line);
         if (eql(u8, line, "};")) break;
     }
+
     return start;
 }
 
