@@ -25,10 +25,10 @@ pub fn main() !void {
         // "pfn",
         // "import",
         // "opaque",
-        "extern_struct_vk",
+        // "extern_struct_vk",
         // "extern_struct",
         // "enum1",
-        // "enum2",
+        "enum2",
         // "type",
     };
 
