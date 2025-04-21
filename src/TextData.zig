@@ -86,8 +86,7 @@ pub fn deinit(self: *TextData) void {
 pub fn parse(self: *TextData) !void {
     var start: usize = 0;
     const len = self.data.len;
-    var n_loops: usize = 0;
-    while (start < len) : (n_loops +%= 1) {
+    while (start < len) {
         const line = self.getNextLine(start);
         start = self.getNextStart(start);
         const linetype = determineLineType(line) orelse continue;
@@ -116,7 +115,7 @@ pub fn parse(self: *TextData) !void {
             .extern_struct => start = (try self.processExternStruct(start)),
             .enum1 => start = (try self.processEnum1(start)),
             .enum2 => start = (try self.processEnum2(start)),
-            .type => try self.processType(start),
+            .type_vk => try self.processType(start),
 
             .base => try self.processBase(start),
         }
@@ -151,6 +150,7 @@ const LineType = enum {
     extern_struct,
     enum1,
     enum2,
+    type_vk,
     type,
 
     base,
@@ -196,6 +196,7 @@ fn determineLineType(line: []const u8) ?LineType {
     if (isSkip(line2)) return null;
     if (isEnum1(line2)) return .enum1;
     if (isEnum2(line2)) return .enum2;
+    if (isTypeVk(line2)) return .type_vk;
     if (isType(line2)) return .type;
     return .base;
 }
@@ -325,12 +326,20 @@ fn isEnum2(line: []const u8) bool {
     return is_ver_2 and is_flag_ver_2;
 }
 
+fn isTypeVk(line: []const u8) bool {
+    const space_idx = std.mem.indexOfScalar(u8, line, ' ') orelse return false;
+    const name = line[0..space_idx];
+    const is_vk = startsWith(u8, name, "Vk");
+    const is_type = isType(line);
+    return is_vk and is_type;
+}
+
 fn isType(line: []const u8) bool {
     const types = [_][]const u8{ "u32", "u64", "i32", "i64" };
-    for (types) |t| {
-        const start = line.len -% t.len -% 1;
+    for (types) |typename| {
+        const start = line.len -% typename.len -% 1;
         const end = line.len -% 1;
-        if (std.mem.endsWith(u8, line[start..end], t)) return true;
+        if (eql(u8, line[start..end], typename)) return true;
     } else return false;
 }
 
@@ -968,21 +977,22 @@ fn processEnum2(self: *const TextData, idx: usize) !usize {
     return start;
 }
 
-fn processType(self: *const TextData, idx: usize) !void {
+fn processTypeVk(self: *const TextData, idx: usize) !void {
     const line = self.getPrevLine(idx);
     const name = getName(line, &.{"Vk"}, &.{});
     if (eql(u8, name, "Bool32")) {
         try self.write("pub const Bool32 = enum(u32) {\n false = 0,\n true = 1,\n };");
         return;
     }
-    const value = getValue(line, &.{}, &.{});
-    const newline = try allocPrint(
-        self.allo,
-        "pub const {s} = {s};",
-        .{ name, value },
-    );
+    const old_name = getName(line, &.{}, &.{});
+    const newline = try std.mem.replaceOwned(u8, self.allo, line, old_name, name);
     defer self.allo.free(newline);
     try self.write(newline);
+}
+
+fn processType(self: *const TextData, idx: usize) !void {
+    const line = self.getPrevLine(idx);
+    try self.write(line);
 }
 
 fn processBase(self: *const TextData, idx: usize) !void {
@@ -1106,8 +1116,8 @@ fn removeIxes(
 fn replaceVkStrs(allo: std.mem.Allocator, data: []const u8) ![]u8 {
     var rdata = try allo.dupe(u8, data);
     const vk_strs = [_][]const u8{ "vk", "Vk", "VK" };
-    const prefix_mods = [_][]const u8{ "_", "]", " " };
-    const suffix_mods = [_][]const u8{ "_", "[", " " };
+    const prefix_mods = [_][]const u8{ "_", "]", "(", " " };
+    const suffix_mods = [_][]const u8{ "_", "[", ")", " " };
 
     for (vk_strs) |vk_str| {
         for (prefix_mods) |prefix| {
