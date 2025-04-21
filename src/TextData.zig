@@ -72,10 +72,10 @@ pub fn deinit(self: *TextData) void {
 
 pub fn parse(self: *TextData) !void {
     var start: usize = 0;
-    while (true) {
+    const len = self.data.len;
+    while (start < len) {
         const line = self.getNextLine(start);
         start +%= line.len +% newline_chars.len;
-        // std.debug.print("Line: {s}\n", .{line});
 
         const linetype = determineLineType(line) orelse continue;
         std.debug.print("LineType: {s}\n", .{@tagName(linetype)});
@@ -99,12 +99,11 @@ pub fn parse(self: *TextData) !void {
             .extern_struct => start = (try self.processExternStruct(start)) +% 1,
             .enum1 => start = (try self.processEnum1(start)) +% 1,
             .enum2 => start = (try self.processEnum2(start)) +% 1,
-            // .type => try self.processType(start),
+            .type => try self.processType(start),
 
             .skip => continue,
             else => {},
         }
-        break;
     }
 
     if (self.type_names.items.len > 0) try self.writeTypeNames();
@@ -486,7 +485,7 @@ fn processOpaque(self: *const TextData, idx: usize) !usize {
     var start: usize = idx;
     line = self.getNextLine(start);
     start +%= line.len +% newline_chars.len;
-    const name = getName(line, &.{}, &.{});
+    const name = getName(line, &.{"Vk"}, &.{});
     const new_line = try std.fmt.allocPrint(self.allo, "pub const {s} = enum(u64) {{ null=0, _ }};", .{name});
     defer self.allo.free(new_line);
     try self.write(new_line);
@@ -822,33 +821,12 @@ fn processEnum2(self: *const TextData, idx: usize) !usize {
 
 fn processType(self: *const TextData, idx: usize) !void {
     const line = self.getPrevLine(idx);
-
-    const temp_name = blk: {
-        const eql_idx = std.mem.indexOfScalar(u8, line, '=').? -% 1;
-        const space_idx = std.mem.lastIndexOfScalar(u8, line[0..eql_idx], ' ').? +% 1;
-        const name = line[space_idx..eql_idx];
-        break :blk try self.allo.dupe(u8, name);
-    };
-    defer self.allo.free(temp_name);
-
-    const name = try replaceVkStrs(self.allo, temp_name);
-    defer self.allo.free(name);
-    // std.debug.print("Name: {s}\n", .{name});
-
+    const name = getName(line, &.{"Vk"}, &.{});
     if (std.mem.eql(u8, name, "Bool32")) {
         try self.write("pub const Bool32 = enum(u32) {\n false = 0,\n true = 1,\n };");
         return;
     }
-
-    const value = blk: {
-        const semicolon_idx = std.mem.lastIndexOfScalar(u8, line, ';').?;
-        const space_idx = std.mem.lastIndexOfScalar(u8, line[0..semicolon_idx], ' ').? +% 1;
-        const value = line[space_idx..semicolon_idx];
-        break :blk try self.allo.dupe(u8, value);
-    };
-    defer self.allo.free(value);
-    // std.debug.print("Value: {s}\n", .{value});
-
+    const value = getValue(line, &.{}, &.{});
     const newline = try std.fmt.allocPrint(
         self.allo,
         "pub const {s} = {s};",
