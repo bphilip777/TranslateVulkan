@@ -85,6 +85,7 @@ pub fn parse(self: *TextData) !void {
         switch (linetype) {
             .inline_fn_vk => start = (try self.processInlineFnVk(start)),
             .inline_fn => start = (try self.processInlineFn(start)),
+            .@"extern" => start = (try self.processExtern(start)),
             .extern_fn_vk => start = (try self.processExternFnVk(start)),
             .extern_fn => try self.processExternFn(start),
             .extern_var => try self.processExternVar(start),
@@ -118,6 +119,7 @@ pub fn parse(self: *TextData) !void {
 const LineType = enum {
     inline_fn_vk,
     inline_fn,
+    @"extern",
     extern_fn_vk,
     extern_fn,
     extern_var,
@@ -149,6 +151,7 @@ fn determineLineType(line: []const u8) ?LineType {
     const line1 = line[strs[0].len +% 1 .. line.len];
     if (isInlineFnVk(line1)) return .inline_fn_vk;
     if (isInlineFn(line1)) return .inline_fn;
+    if (isExtern(line1)) return .@"extern";
     if (isExternFnVk(line1)) return .extern_fn_vk;
     if (isExternFn(line1)) return .extern_fn;
     if (isExternVar(line1)) return .extern_var;
@@ -180,6 +183,10 @@ fn isInlineFnVk(line: []const u8) bool {
 
 fn isInlineFn(line: []const u8) bool {
     return std.mem.startsWith(u8, line, "inline fn");
+}
+
+fn isExtern(line: []const u8) bool {
+    return std.mem.indexOf(u8, line, "@extern") != null;
 }
 
 fn isExternFnVk(line: []const u8) bool {
@@ -317,6 +324,19 @@ fn processInlineFn(self: *const TextData, idx: usize) !usize {
         start = self.getNextStart(start);
         try self.write(line);
         if (std.mem.eql(u8, line, "}")) break;
+    }
+    return start;
+}
+
+fn processExtern(self: *const TextData, idx: usize) !usize {
+    var line = self.getPrevLine(idx);
+    try self.write(line);
+    var start = idx;
+    while (true) {
+        line = self.getNextLine(start);
+        start = self.getNextStart(start);
+        try self.write(line);
+        if (std.mem.eql(u8, line, "});")) break;
     }
     return start;
 }
