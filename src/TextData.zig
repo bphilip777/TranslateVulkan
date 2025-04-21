@@ -73,31 +73,35 @@ pub fn deinit(self: *TextData) void {
 pub fn parse(self: *TextData) !void {
     var start: usize = 0;
     const len = self.data.len;
-    while (start < len) {
+    var n_loops: usize = 0;
+    while (start < len) : (n_loops +%= 1) {
         const line = self.getNextLine(start);
-        start +%= line.len +% newline_chars.len;
+        std.debug.print("Line: {s}\n", .{line});
+        start = self.getNextStart(start);
+
         const linetype = determineLineType(line) orelse continue;
-        std.debug.print("LineType: {s}\n", .{@tagName(linetype)});
+        std.debug.print("Type: {s}\n", .{@tagName(linetype)});
+
         switch (linetype) {
-            .inline_fn_vk => start = (try self.processInlineFnVk(start)) +% 1,
-            .inline_fn => start = (try self.processInlineFn(start)) +% 1,
-            .extern_fn_vk => start = (try self.processExternFnVk(start)) +% 1,
+            .inline_fn_vk => start = (try self.processInlineFnVk(start)),
+            .inline_fn => start = (try self.processInlineFn(start)),
+            .extern_fn_vk => start = (try self.processExternFnVk(start)),
             .extern_fn => try self.processExternFn(start),
             .extern_var => try self.processExternVar(start),
             .extern_const => try self.processExternConst(start),
             .export_var => try self.processExportVar(start),
-            .@"fn" => start = (try self.processFn(start)) +% 1,
+            .@"fn" => start = (try self.processFn(start)),
 
             .extension_name => try self.processExtensionName(start),
             .spec_version => try self.processSpecVersion(start),
             .type_name => try self.processTypeName(start),
             .pfn => try self.processPFN(start),
             .import => try self.processImport(start),
-            .@"opaque" => start = (try self.processOpaque(start)) +% 1,
-            .extern_struct_vk => start = (try self.processExternStructVk(start)) +% 1,
-            .extern_struct => start = (try self.processExternStruct(start)) +% 1,
-            .enum1 => start = (try self.processEnum1(start)) +% 1,
-            .enum2 => start = (try self.processEnum2(start)) +% 1,
+            .@"opaque" => start = (try self.processOpaque(start)),
+            .extern_struct_vk => start = (try self.processExternStructVk(start)),
+            .extern_struct => start = (try self.processExternStruct(start)),
+            .enum1 => start = (try self.processEnum1(start)),
+            .enum2 => start = (try self.processEnum2(start)),
             .type => try self.processType(start),
 
             .skip => continue,
@@ -287,7 +291,7 @@ fn processInlineFnVk(self: *const TextData, idx: usize) !usize {
     }
     while (true) {
         const line = self.getNextLine(start);
-        start +%= line.len +% newline_chars.len;
+        start = self.getNextStart(start);
         try self.write(line);
         if (std.mem.eql(u8, line, "}")) break;
     }
@@ -300,7 +304,7 @@ fn processInlineFn(self: *const TextData, idx: usize) !usize {
     try self.write(line);
     while (true) {
         line = self.getNextLine(start);
-        start +%= line.len +% newline_chars.len;
+        start = self.getNextStart(start);
         try self.write(line);
         if (std.mem.eql(u8, line, "}")) break;
     }
@@ -310,7 +314,7 @@ fn processInlineFn(self: *const TextData, idx: usize) !usize {
 fn processExternFnVk(self: *const TextData, idx: usize) !usize {
     var start = idx;
     const line = self.getPrevLine(start);
-    start +%= line.len +% newline_chars.len;
+    start = self.getNextStart(start);
     const fn_name = getFnName(line, &.{"vk"}, &.{});
     const camel_fn_name = try cc.convert(self.allo, fn_name, .camel);
     defer self.allo.free(camel_fn_name);
@@ -350,7 +354,7 @@ fn processFn(self: *const TextData, idx: usize) !usize {
     var start: usize = idx;
     while (true) {
         line = self.getNextLine(start);
-        start +%= line.len +% newline_chars.len;
+        start = self.getNextStart(start);
         try self.write(line);
         if (std.mem.eql(u8, line, "}")) break;
     }
@@ -371,7 +375,6 @@ fn processTypeName(self: *TextData, idx: usize) !void {
         .{ trim_vk_prefix, type_name },
     );
     const new_field_value = try self.allo.dupe(u8, getValue(line, &.{}, &.{}));
-
     try self.type_names.append(.{
         .name = new_field_name,
         .value = new_field_value,
@@ -390,17 +393,9 @@ fn writeTypeNames(self: *const TextData) !void {
 
 fn processExtensionName(self: *TextData, idx: usize) !void {
     const line = self.getPrevLine(idx);
-
     const name = getName(line, &.{"VK_KHR_"}, &.{"_EXTENSION_NAME"});
-    // std.debug.print("Name: {s}\n", .{name});
-
     const new_field_name = try cc.convert(self.allo, name, .snake);
-    // defer self.allo.free(new_field_name);
-    // std.debug.print("New Field Name: {s}\n", .{new_field_name});
-
     const new_field_value = try self.allo.dupe(u8, getValue(line, &.{}, &.{}));
-    // std.debug.print("Value: {s}\n", .{new_field_value});
-
     try self.extension_names.append(.{
         .name = new_field_name,
         .value = new_field_value,
@@ -423,30 +418,17 @@ fn writeExtensionNames(self: *const TextData) !void {
 
 fn processSpecVersion(self: *TextData, idx: usize) !void {
     const line = self.getPrevLine(idx);
-    // std.debug.print("Line: {s}\n", .{line});
-
     const name = getName(line, &.{ "VK_KHR_", "VK_" }, &.{"_SPEC_VERSION"});
-    // std.debug.print("Name: {s}\n", .{name});
-
     const snake_name = try cc.convert(self.allo, name, .snake);
     defer self.allo.free(snake_name);
-    // std.debug.print("Snake Name: {s}\n", .{snake_name});
-
     const tname = getType(line, &.{}, &.{});
     const type_name = if (std.mem.eql(u8, tname, "c_uint")) "u32" else "i32";
-
     const new_field_name = try std.fmt.allocPrint(
         self.allo,
         "{s}:{s}",
         .{ snake_name, type_name },
     );
-    // defer self.allo.free(new_field_name);
-    // std.debug.print("Field Name: {s}\n", .{new_field_name});
-
     const new_field_value = try self.allo.dupe(u8, getValue(line, &.{}, &.{}));
-    // defer self.allo.free(new_field_value);
-    // std.debug.print("Field Value: {s}\n", .{new_field_value});
-
     try self.spec_versions.append(.{
         .name = new_field_name,
         .value = new_field_value,
@@ -481,11 +463,14 @@ fn processImport(self: *const TextData, idx: usize) !void {
 
 fn processOpaque(self: *const TextData, idx: usize) !usize {
     var line = self.getPrevLine(idx);
-    var start: usize = idx;
-    line = self.getNextLine(start);
-    start +%= line.len +% newline_chars.len;
+    line = self.getNextLine(idx);
+    const start = self.getNextStart(idx);
     const name = getName(line, &.{"Vk"}, &.{});
-    const new_line = try std.fmt.allocPrint(self.allo, "pub const {s} = enum(u64) {{ null=0, _ }};", .{name});
+    const new_line = try std.fmt.allocPrint(
+        self.allo,
+        "pub const {s} = enum(u64) {{ null = 0, _ }};",
+        .{name},
+    );
     defer self.allo.free(new_line);
     try self.write(new_line);
     return start;
@@ -506,7 +491,7 @@ fn processExternStructVk(self: *const TextData, idx: usize) !usize {
     // body
     while (true) {
         line = self.getNextLine(start);
-        start +%= line.len +% newline_chars.len;
+        start = self.getNextStart(start);
 
         const rline = try replaceVkStrs(self.allo, line);
         defer self.allo.free(rline);
@@ -527,19 +512,20 @@ fn processExternStructVk(self: *const TextData, idx: usize) !usize {
         try self.write(rline);
         if (std.mem.eql(u8, line, "};")) break;
     }
+
     line = self.getNextLine(start);
-    start +%= line.len +% newline_chars.len;
+    start = self.getNextStart(start);
     return start;
 }
 
 fn processExternStruct(self: *const TextData, idx: usize) !usize {
     var start = idx;
     var line = self.getPrevLine(start);
-    start +%= line.len +% newline_chars.len;
     try self.write(line);
     while (true) {
         line = self.getNextLine(start);
-        start +%= line.len +% newline_chars.len;
+        std.debug.print("Line: {s}\n", .{line});
+        start = self.getNextStart(start);
         if (std.mem.indexOfScalar(u8, line, ':')) |colon_idx| {
             const space_idx = std.mem.lastIndexOfScalar(u8, line[0..colon_idx], ' ').? +% 1;
             const field_name = line[space_idx..colon_idx];
@@ -562,9 +548,12 @@ fn processExternStruct(self: *const TextData, idx: usize) !usize {
 fn processEnum1(self: *const TextData, idx: usize) !usize {
     const prev_line = self.getPrevLine(idx);
     var line = prev_line;
+    std.debug.print("Prev Line: {s}\n", .{prev_line});
+
     const title_type = if (std.mem.eql(u8, getValue(line, &.{}, &.{}), "c_uint")) "u32" else "i32";
+
     line = self.getNextLine(idx);
-    const start = idx +% line.len +% newline_chars.len;
+    const start = self.getNextStart(idx);
     const found_name = getName(line, &.{}, &.{});
     const title_name = getName(line, &.{"Vk"}, &.{ "FlagBitsKHR", "FlagBits" });
     const title_line = try std.fmt.allocPrint(
@@ -595,10 +584,10 @@ fn processEnum1(self: *const TextData, idx: usize) !usize {
     defer unique_values.deinit();
 
     line = prev_line;
-    var curr = idx -% prev_line.len -% newline_chars.len;
+    var curr = self.getPrevStart(idx);
     while (curr > 0) {
         line = self.getPrevLine(curr);
-        curr = curr -% line.len -% newline_chars.len;
+        curr = self.getPrevStart(idx);
         const ssn = getScreamingSnakeName(line, &.{}, &.{}) orelse break;
 
         const new_name = try cc.convert(self.allo, ssn, .snake);
@@ -679,13 +668,12 @@ fn processEnum1(self: *const TextData, idx: usize) !usize {
     for (fields.items) |field| {
         const field_line = try std.fmt.allocPrint(
             self.allo,
-            "{s} = {s},",
+            "    {s} = {s},",
             .{ field.name, field.value },
         );
         defer self.allo.free(field_line);
         try self.write(field_line);
     }
-
     try self.write("};");
 
     return start;
@@ -693,7 +681,7 @@ fn processEnum1(self: *const TextData, idx: usize) !usize {
 
 fn processEnum2(self: *const TextData, idx: usize) !usize {
     var line = self.getPrevLine(idx);
-    var start: usize = idx +% line.len +% newline_chars.len;
+    var start = self.getNextStart(idx);
 
     const title_name = getName(line, &.{"Vk"}, &.{});
     const title_type = if (std.mem.eql(u8, getValue(line, &.{}, &.{}), "c_uint")) "u32" else "i32";
@@ -725,7 +713,7 @@ fn processEnum2(self: *const TextData, idx: usize) !usize {
     while (true) {
         line = self.getNextLine(start);
         if (std.mem.indexOfScalar(u8, line, ':') != null) break;
-        start +%= line.len +% newline_chars.len;
+        start = self.getNextStart(idx);
     }
 
     var fields = std.ArrayList(NameValue).init(self.allo);
@@ -743,7 +731,7 @@ fn processEnum2(self: *const TextData, idx: usize) !usize {
 
     while (true) {
         line = self.getNextLine(start);
-        start +%= line.len +% newline_chars.len;
+        start = self.getNextStart(idx);
         const ssn = getScreamingSnakeName(line, &.{}, &.{}) orelse break;
 
         var name_words = try cc.split2Words(self.allo, ssn);
@@ -1041,9 +1029,17 @@ fn getNextLine(self: *const TextData, start: usize) []const u8 {
     return trimLineEnd(self.data[start..end]);
 }
 
+fn getNextStart(self: *const TextData, start: usize) usize {
+    return start +% self.getEndOfCurrLine(start) +% 1;
+}
+
 fn getPrevLine(self: *const TextData, end: usize) []const u8 {
     const start = self.getStartOfPrevLine(end -% 1);
     return trimLineEnd(self.data[start..end]);
+}
+
+fn getPrevStart(self: *const TextData, end: usize) usize {
+    return self.getStartOfPrevLine(end -% 1);
 }
 
 fn getMatches(
