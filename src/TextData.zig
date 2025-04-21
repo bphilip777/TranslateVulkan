@@ -121,7 +121,6 @@ pub fn parse(self: *TextData) !void {
             .enum2 => start = (try self.processEnum2(start)),
             .type => try self.processType(start),
 
-            .skip => continue,
             .base => try self.processBase(start),
         }
     }
@@ -158,13 +157,18 @@ const LineType = enum {
     type,
 
     base,
-    skip,
 };
 
 fn determineLineType(line: []const u8) ?LineType {
     const strs = [_][]const u8{ "pub", "const" };
-    if (!startsWith(u8, line, strs[0])) return null;
 
+    if (startsWith(u8, line, strs[1])) {
+        const line1 = line[strs[1].len +% 1 .. line.len];
+        if (isExternUnion(line1)) return .extern_union;
+        return null;
+    }
+
+    if (!startsWith(u8, line, strs[0])) return null;
     const line1 = line[strs[0].len +% 1 .. line.len];
     if (isInlineFnVk(line1)) return .inline_fn_vk;
     if (isInlineFn(line1)) return .inline_fn;
@@ -189,7 +193,7 @@ fn determineLineType(line: []const u8) ?LineType {
     if (isExternUnion(line2)) return .extern_union;
     if (isExternStructVk(line2)) return .extern_struct_vk;
     if (isExternStruct(line2)) return .extern_struct;
-    if (isSkip(line2)) return .skip;
+    if (isSkip(line2)) return null;
     if (isEnum1(line2)) return .enum1;
     if (isEnum2(line2)) return .enum2;
     if (isType(line2)) return .type;
@@ -281,8 +285,8 @@ fn isOpaque(line: []const u8) bool {
 
 fn isExternUnionVk(line: []const u8) bool {
     const is_vk = startsWith(u8, line, "union_Vk");
-    const is_union = isExternUnion(line);
-    return is_vk and is_union;
+    const is_extern_union = isExternUnion(line);
+    return is_vk and is_extern_union;
 }
 
 fn isExternUnion(line: []const u8) bool {
