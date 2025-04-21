@@ -89,11 +89,8 @@ pub fn parse(self: *TextData) !void {
     var n_loops: usize = 0;
     while (start < len) : (n_loops +%= 1) {
         const line = self.getNextLine(start);
-        // std.debug.print("Line: {s}\n", .{line});
         start = self.getNextStart(start);
-
         const linetype = determineLineType(line) orelse continue;
-        // std.debug.print("Type: {s}\n", .{@tagName(linetype)});
 
         switch (linetype) {
             .inline_fn_vk => start = (try self.processInlineFnVk(start)),
@@ -508,10 +505,7 @@ fn processSpecVersion(self: *TextData, idx: usize) !void {
     // lots of edge cases
     const line = self.getPrevLine(idx);
     const name = getName(line, &.{ "VK_KHR_", "VK_" }, &.{"_SPEC_VERSION"});
-    const snake_name = cc.convert(self.allo, name, .snake) catch |err| {
-        std.debug.print("Name: {s}\n", .{name});
-        return err;
-    };
+    const snake_name = try cc.convert(self.allo, name, .snake);
     defer self.allo.free(snake_name);
     const snake_name1 = try prefixWithAt(self.allo, snake_name);
     defer self.allo.free(snake_name1);
@@ -577,7 +571,6 @@ fn processImport(self: *const TextData, idx: usize) !void {
 
 fn processOpaqueVk(self: *const TextData, idx: usize) !usize {
     const line = self.getNextLine(idx);
-    std.debug.print("Line: {s}\n", .{line});
 
     const start = self.getNextStart(idx);
     const name = getName(line, &.{"Vk"}, &.{});
@@ -661,10 +654,14 @@ fn processExternStructVk(self: *const TextData, idx: usize) !usize {
             const field_name2 = try prefixWithAt(self.allo, field_name1);
             defer self.allo.free(field_name2);
 
+            const field_value = line[colon_idx..line.len];
+            const field_value1 = try replaceVkStrs(self.allo, field_value);
+            defer self.allo.free(field_value1);
+
             const new_line = try allocPrint(
                 self.allo,
                 "    {s}{s}",
-                .{ field_name2, line[colon_idx..line.len] },
+                .{ field_name2, field_value1 },
             );
             defer self.allo.free(new_line);
             try self.write(new_line);
@@ -756,7 +753,6 @@ fn processEnum1(self: *const TextData, idx: usize) !usize {
     var curr = self.getPrevStart(idx);
     while (curr > 0) {
         line = self.getPrevLine(curr);
-        std.debug.print("Line: {s}\n", .{line});
         curr = self.getPrevStart(curr);
         const ssn = getScreamingSnakeName(line, &.{"VK_"}, &.{}) orelse break;
 
@@ -909,10 +905,7 @@ fn processEnum2(self: *const TextData, idx: usize) !usize {
 
         const matches = try getMatches(self.allo, name_words, title_words);
         defer self.allo.free(matches);
-
-        std.debug.print("SSN: {s}\n", .{ssn});
         if (!anyMatches(matches)) break;
-        std.debug.print("SSN: {s}\n", .{ssn});
 
         for (0..matches.len) |i| {
             const j = matches.len -% i -% 1;
