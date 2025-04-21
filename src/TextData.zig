@@ -548,12 +548,11 @@ fn processExternStruct(self: *const TextData, idx: usize) !usize {
 fn processEnum1(self: *const TextData, idx: usize) !usize {
     const prev_line = self.getPrevLine(idx);
     var line = prev_line;
-    std.debug.print("Prev Line: {s}\n", .{prev_line});
 
     const title_type = if (std.mem.eql(u8, getValue(line, &.{}, &.{}), "c_uint")) "u32" else "i32";
 
     line = self.getNextLine(idx);
-    const start = self.getNextStart(idx);
+    var start = self.getNextStart(idx);
     const found_name = getName(line, &.{}, &.{});
     const title_name = getName(line, &.{"Vk"}, &.{ "FlagBitsKHR", "FlagBits" });
     const title_line = try std.fmt.allocPrint(
@@ -587,7 +586,7 @@ fn processEnum1(self: *const TextData, idx: usize) !usize {
     var curr = self.getPrevStart(idx);
     while (curr > 0) {
         line = self.getPrevLine(curr);
-        curr = self.getPrevStart(idx);
+        curr = self.getPrevStart(curr);
         const ssn = getScreamingSnakeName(line, &.{}, &.{}) orelse break;
 
         const new_name = try cc.convert(self.allo, ssn, .snake);
@@ -676,6 +675,7 @@ fn processEnum1(self: *const TextData, idx: usize) !usize {
     }
     try self.write("};");
 
+    start = self.getNextStart(start);
     return start;
 }
 
@@ -731,7 +731,7 @@ fn processEnum2(self: *const TextData, idx: usize) !usize {
 
     while (true) {
         line = self.getNextLine(start);
-        start = self.getNextStart(idx);
+        start = self.getNextStart(start);
         const ssn = getScreamingSnakeName(line, &.{}, &.{}) orelse break;
 
         var name_words = try cc.split2Words(self.allo, ssn);
@@ -794,7 +794,7 @@ fn processEnum2(self: *const TextData, idx: usize) !usize {
     for (fields.items) |field| {
         const newline = try std.fmt.allocPrint(
             self.allo,
-            "{s} = {s},",
+            "    {s} = {s},",
             .{ field.name, field.value },
         );
         defer self.allo.free(newline);
