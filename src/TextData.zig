@@ -34,7 +34,10 @@ pub fn init(
     rfilename: []const u8,
     wfilename: []const u8,
 ) !TextData {
-    const rfile = try std.fs.cwd().openFile(rfilename, .{});
+    const rfile = std.fs.cwd().openFile(rfilename, .{}) catch |err| {
+        std.debug.print("File: {s}\n", .{rfilename});
+        return err;
+    };
     defer rfile.close();
 
     const stat = try rfile.stat();
@@ -499,7 +502,7 @@ fn writeTypeNames(self: *const TextData) !void {
 
 fn processExtensionName(self: *TextData, idx: usize) !void {
     const line = self.getPrevLine(idx);
-    const name = getName(line, &.{"VK_"}, &.{"_EXTENSION_NAME"});
+    const name = getName(line, &.{ "VK_KHR_", "VK_" }, &.{"_EXTENSION_NAME"});
     const field_name = try cc.convert(self.allo, name, .snake);
     defer self.allo.free(field_name);
     const new_field_name = try prefixWithAt(self.allo, field_name);
