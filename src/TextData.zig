@@ -382,7 +382,7 @@ fn processTypeName(self: *TextData, idx: usize) !void {
 }
 
 fn writeTypeNames(self: *const TextData) !void {
-    try self.write("pub const TypeName = struct {");
+    try self.write("pub const TypeNames = struct {");
     for (self.type_names.items) |tn| {
         const newline = try std.fmt.allocPrint(self.allo, "{s} = {s},", .{ tn.name, tn.value });
         defer self.allo.free(newline);
@@ -436,7 +436,7 @@ fn processSpecVersion(self: *TextData, idx: usize) !void {
 }
 
 fn writeSpecVersions(self: *const TextData) !void {
-    try self.write("pub const SpecVersion = struct {");
+    try self.write("pub const SpecVersions = struct {");
     for (self.spec_versions.items) |sv| {
         const newline = try std.fmt.allocPrint(
             self.allo,

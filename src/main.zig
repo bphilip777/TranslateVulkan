@@ -41,9 +41,9 @@ pub fn main() !void {
         // "extern_struct_vk",
         // "extern_struct",
         // "enum1",
-        "enum2",
+        // "enum2",
         // "type",
-        // "all",
+        "all",
     };
 
     for (filepaths) |filepath| {
