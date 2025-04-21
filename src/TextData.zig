@@ -115,7 +115,8 @@ pub fn parse(self: *TextData) !void {
             .extern_struct => start = (try self.processExternStruct(start)),
             .enum1 => start = (try self.processEnum1(start)),
             .enum2 => start = (try self.processEnum2(start)),
-            .type_vk => try self.processType(start),
+            .type_vk => try self.processTypeVk(start),
+            .type => try self.processType(start),
 
             .base => try self.processBase(start),
         }
@@ -335,12 +336,28 @@ fn isTypeVk(line: []const u8) bool {
 }
 
 fn isType(line: []const u8) bool {
-    const types = [_][]const u8{ "u32", "u64", "i32", "i64" };
-    for (types) |typename| {
-        const start = line.len -% typename.len -% 1;
-        const end = line.len -% 1;
-        if (eql(u8, line[start..end], typename)) return true;
-    } else return false;
+    const types = std.StaticStringMap(void).initComptime(.{
+        .{ "u8", {} },
+        .{ "u32", {} },
+        .{ "u64", {} },
+        .{ "i8", {} },
+        .{ "i32", {} },
+        .{ "i64", {} },
+        .{ "?*anyopaque", {} },
+        .{ "?*const fn (c_int) callconv(.c) void", {} },
+        .{ "c_short", {} },
+        .{ "c_int", {} },
+        .{ "c_long", {} },
+        .{ "c_longlong", {} },
+        .{ "c_ushort", {} },
+        .{ "c_uint", {} },
+        .{ "c_ulong", {} },
+        .{ "c_ulonglong", {} },
+    });
+    const start = (indexOfScalar(u8, line, '=') orelse return false) +% 2;
+    const end = lastIndexOfScalar(u8, line, ';') orelse return false;
+    const type_name = line[start..end];
+    return types.has(type_name);
 }
 
 fn processInlineFnVk(self: *const TextData, idx: usize) !usize {
