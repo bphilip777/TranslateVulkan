@@ -89,11 +89,11 @@ pub fn parse(self: *TextData) !void {
     var n_loops: usize = 0;
     while (start < len) : (n_loops +%= 1) {
         const line = self.getNextLine(start);
-        std.debug.print("Line: {s}\n", .{line});
+        // std.debug.print("Line: {s}\n", .{line});
         start = self.getNextStart(start);
 
         const linetype = determineLineType(line) orelse continue;
-        std.debug.print("Type: {s}\n", .{@tagName(linetype)});
+        // std.debug.print("Type: {s}\n", .{@tagName(linetype)});
 
         switch (linetype) {
             .inline_fn_vk => start = (try self.processInlineFnVk(start)),
@@ -141,9 +141,10 @@ const LineType = enum {
     export_var,
     @"fn",
 
-    type_name,
+    compile_error,
     extension_name,
     spec_version,
+    type_name,
     pfn,
     import,
     opaque_vk,
@@ -182,6 +183,7 @@ fn determineLineType(line: []const u8) ?LineType {
 
     if (!startsWith(u8, line1, strs[1])) return null;
     const line2 = line1[strs[1].len +% 1 .. line1.len];
+    if (isCompileError(line2)) return null;
     if (isExtensionName(line2)) return .extension_name;
     if (isSpecVersion(line2)) return .spec_version;
     if (isTypeName(line2)) return .type_name;
@@ -243,6 +245,13 @@ fn isSkip(line: []const u8) bool {
     const is_screaming_snake = cc.isCase(name[0 .. name.len -% 1], .screaming_snake);
     const vk_name = startsWith(u8, line, "VK_");
     return has_colon and is_screaming_snake and vk_name;
+}
+
+fn isCompileError(line: []const u8) bool {
+    const open_paren_idx = indexOfScalar(u8, line, '(') orelse return false;
+    const space_idx = lastIndexOfScalar(u8, line[0..open_paren_idx], ' ').? +% 1;
+    const name = line[space_idx..open_paren_idx];
+    return eql(u8, name, "@compileError");
 }
 
 fn isExtensionName(line: []const u8) bool {
