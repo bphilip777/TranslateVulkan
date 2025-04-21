@@ -831,6 +831,12 @@ fn processEnum2(self: *const TextData, idx: usize) !usize {
     }
     try self.write("};");
 
+    line = self.getNextLine(start);
+    const new_name = getName(line, &.{"Vk"}, &.{"Flags"});
+    if (std.mem.eql(u8, new_name, title_name)) {
+        start = self.getNextStart(start);
+    }
+
     return start;
 }
 
