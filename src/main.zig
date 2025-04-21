@@ -6,6 +6,17 @@ pub fn main() !void {
     const allo = da.allocator();
     defer std.debug.assert(.ok == da.deinit());
 
+    const src_path = "src/translated_vulkan.zig";
+    const dst_path = "src/vulkan.zig";
+
+    var text = try TextData.init(allo, src_path, dst_path);
+    defer text.deinit();
+    try text.parse();
+}
+
+test "Parse different text files" {
+    const allo = std.testing.allocator;
+
     const src_dir = "src/test/src/";
     const dst_dir = "src/test/dst/";
     const ext = ".zig";

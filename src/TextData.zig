@@ -76,7 +76,6 @@ pub fn parse(self: *TextData) !void {
     while (start < len) {
         const line = self.getNextLine(start);
         start +%= line.len +% newline_chars.len;
-
         const linetype = determineLineType(line) orelse continue;
         std.debug.print("LineType: {s}\n", .{@tagName(linetype)});
         switch (linetype) {
@@ -102,7 +101,7 @@ pub fn parse(self: *TextData) !void {
             .type => try self.processType(start),
 
             .skip => continue,
-            else => {},
+            .base => try self.processBase(start),
         }
     }
 
@@ -834,6 +833,11 @@ fn processType(self: *const TextData, idx: usize) !void {
     );
     defer self.allo.free(newline);
     try self.write(newline);
+}
+
+fn processBase(self: *const TextData, idx: usize) !void {
+    const line = self.getPrevLine(idx);
+    try self.write(line);
 }
 
 inline fn write(self: *const TextData, line: []const u8) !void {
