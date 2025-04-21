@@ -1,4 +1,6 @@
 const std = @import("std");
+const isDigit = std.ascii.isDigit;
+const Allocator = std.mem.Allocator;
 const builtin = @import("builtin");
 const newline_chars = if (builtin.os.tag == .windows) "\r\n" else "\n";
 
@@ -398,12 +400,10 @@ fn processTypeName(self: *TextData, idx: usize) !void {
     defer self.allo.free(snake_name);
     const trim_vk_prefix = try replaceVkStrs(self.allo, snake_name);
     defer self.allo.free(trim_vk_prefix);
+    const word = try prefixWithAt(self.allo, trim_vk_prefix);
+    defer self.allo.free(word);
     const type_name = if (std.mem.eql(u8, getType(line, &.{}, &.{}).?, "c_uint")) "u32" else "i32";
-    const new_field_name = try std.fmt.allocPrint(
-        self.allo,
-        "{s}: {s}",
-        .{ trim_vk_prefix, type_name },
-    );
+    const new_field_name = try std.fmt.allocPrint(self.allo, "{s}: {s}", .{ word, type_name });
     const new_field_value = try self.allo.dupe(u8, getValue(line, &.{}, &.{}));
     try self.type_names.append(.{
         .name = new_field_name,
@@ -470,6 +470,26 @@ fn processSpecVersion(self: *TextData, idx: usize) !void {
 }
 
 fn writeSpecVersions(self: *const TextData) !void {
+    for (0..self.spec_versions.items.len -% 1) |i| {
+        for (i +% 1..self.spec_versions.items.len) |j| {
+            const old_sv = self.spec_versions.items[i];
+            const new_sv = self.spec_versions.items[j];
+            if (old_sv.value.len > new_sv.value.len) {
+                const tmp = self.spec_versions.items[i];
+                self.spec_versions.items[i] = self.spec_versions.items[j];
+                self.spec_versions.items[j] = tmp;
+            } else {
+                const ov = try std.fmt.parseInt(i128, old_sv.value, 10);
+                const nv = try std.fmt.parseInt(i128, new_sv.value, 10);
+                if (ov > nv) {
+                    const tmp = self.spec_versions.items[i];
+                    self.spec_versions.items[i] = self.spec_versions.items[j];
+                    self.spec_versions.items[j] = tmp;
+                }
+            }
+        }
+    }
+
     try self.write("pub const SpecVersions = struct {");
     for (self.spec_versions.items) |sv| {
         const newline = try std.fmt.allocPrint(
@@ -520,15 +540,10 @@ fn processExternStructVk(self: *const TextData, idx: usize) !usize {
     var start = idx;
     var line = self.getPrevLine(start);
     const name = getName(line, &.{"struct_Vk"}, &.{});
-    const title = try std.fmt.allocPrint(
-        self.allo,
-        "pub const {s} = extern struct {{",
-        .{name},
-    );
+    const title = try std.fmt.allocPrint(self.allo, "pub const {s} = extern struct {{", .{name});
     defer self.allo.free(title);
     try self.write(title);
 
-    // body
     while (true) {
         line = self.getNextLine(start);
         start = self.getNextStart(start);
@@ -539,17 +554,21 @@ fn processExternStructVk(self: *const TextData, idx: usize) !usize {
         if (std.mem.indexOfScalar(u8, line, ':')) |colon_idx| {
             const space_idx = std.mem.lastIndexOfScalar(u8, line[0..colon_idx], ' ').? +% 1;
             const field_name = line[space_idx..colon_idx];
-            var new_field_name = cc.convert(self.allo, field_name, .snake) catch {
+
+            const field_name1 = cc.convert(self.allo, field_name, .snake) catch {
                 try self.write(line);
                 continue;
             };
-            defer self.allo.free(new_field_name);
-            if (isKeyword(new_field_name) or std.ascii.isDigit(new_field_name[0])) {
-                const tmp = try std.fmt.allocPrint(self.allo, "_{s}", .{new_field_name});
-                self.allo.free(new_field_name);
-                new_field_name = tmp;
-            }
-            const new_line = try std.mem.replaceOwned(u8, self.allo, line, field_name, new_field_name);
+            defer self.allo.free(field_name1);
+
+            const field_name2 = try prefixWithAt(self.allo, field_name1);
+            defer self.allo.free(field_name2);
+
+            const new_line = try std.fmt.allocPrint(
+                self.allo,
+                "    {s}{s}",
+                .{ field_name2, line[colon_idx..line.len] },
+            );
             defer self.allo.free(new_line);
             try self.write(new_line);
             continue;
@@ -569,24 +588,28 @@ fn processExternStruct(self: *const TextData, idx: usize) !usize {
     try self.write(line);
     while (true) {
         line = self.getNextLine(start);
-        std.debug.print("Line: {s}\n", .{line});
         start = self.getNextStart(start);
         if (std.mem.indexOfScalar(u8, line, ':')) |colon_idx| {
             const space_idx = std.mem.lastIndexOfScalar(u8, line[0..colon_idx], ' ').? +% 1;
             const field_name = line[space_idx..colon_idx];
-            var new_field_name = cc.convert(self.allo, field_name, .snake) catch {
+
+            const field_name1 = cc.convert(self.allo, field_name, .snake) catch {
                 try self.write(line);
                 continue;
             };
-            if (isKeyword(new_field_name) or std.ascii.isDigit(new_field_name[0])) {
-                const tmp = try std.fmt.allocPrint(self.allo, "_{s}", .{new_field_name});
-                self.allo.free(new_field_name);
-                new_field_name = tmp;
-            }
-            defer self.allo.free(new_field_name);
-            const new_line = try std.mem.replaceOwned(u8, self.allo, line, field_name, new_field_name);
+            defer self.allo.free(field_name1);
+
+            const field_name2 = try prefixWithAt(self.allo, field_name1);
+            defer self.allo.free(field_name2);
+
+            const new_line = try std.fmt.allocPrint(
+                self.allo,
+                "    {s}{s}",
+                .{ field_name2, line[colon_idx..line.len] },
+            );
             defer self.allo.free(new_line);
             try self.write(new_line);
+
             continue;
         }
         try self.write(line);
@@ -661,15 +684,7 @@ fn processEnum1(self: *const TextData, idx: usize) !usize {
         const temp_field_name = if (name_words.items.len > 0) try cc.words2Snake(self.allo, name_words) else try self.allo.dupe(u8, "_base");
         defer self.allo.free(temp_field_name);
 
-        const new_field_name = blk: {
-            var new_field_name: []u8 = undefined;
-            if (isKeyword(temp_field_name) or std.ascii.isDigit(temp_field_name[0])) {
-                new_field_name = try std.fmt.allocPrint(self.allo, "_{s}", .{temp_field_name});
-            } else {
-                new_field_name = try self.allo.dupe(u8, temp_field_name);
-            }
-            break :blk new_field_name;
-        };
+        const new_field_name = try prefixWithAt(self.allo, temp_field_name);
         const new_field_value = try self.allo.dupe(u8, getValue(line, &.{}, &.{}));
 
         if (unique_names.get(new_field_name)) |_| {
@@ -755,7 +770,7 @@ fn processEnum2(self: *const TextData, idx: usize) !usize {
     defer title_words.deinit();
     for (title_words.items, 0..) |*title_word, i| {
         const word = title_word.*;
-        if (word.len > 1 and std.ascii.isDigit(word[word.len -% 1])) {
+        if (word.len > 1 and isDigit(word[word.len -% 1])) {
             const new_digit = try self.allo.dupe(u8, word[word.len -% 1 .. word.len]);
             try title_words.insert(i +% 1, new_digit);
 
@@ -812,18 +827,7 @@ fn processEnum2(self: *const TextData, idx: usize) !usize {
         const temp_field_name = if (name_words.items.len > 0) try cc.words2Snake(self.allo, name_words) else try self.allo.dupe(u8, "_base");
         defer self.allo.free(temp_field_name);
 
-        const new_field_name = blk: {
-            var new_field_name: []u8 = undefined;
-            if (isKeyword(temp_field_name) or std.ascii.isDigit(temp_field_name[0])) {
-                new_field_name = try self.allo.alloc(u8, temp_field_name.len +% 1);
-                @memcpy(new_field_name[1..new_field_name.len], new_field_name);
-                new_field_name[0] = '_';
-            } else {
-                new_field_name = try self.allo.dupe(u8, temp_field_name);
-            }
-            break :blk new_field_name;
-        };
-
+        const new_field_name = try prefixWithAt(self.allo, temp_field_name);
         const new_field_value = try self.allo.dupe(u8, getValue(line, &.{}, &.{}));
 
         if (unique_names.get(new_field_name)) |_| {
@@ -1188,4 +1192,9 @@ fn isKeyword(word: []const u8) bool {
         .{ "while", {} },
     });
     return map.has(word);
+}
+
+fn prefixWithAt(allo: Allocator, data: []const u8) ![]const u8 {
+    if (isKeyword(data) or isDigit(data[0])) return try std.fmt.allocPrint(allo, "@\"{s}\"", .{data});
+    return try allo.dupe(u8, data);
 }
