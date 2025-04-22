@@ -1,3 +1,117 @@
+pub const _beep = @compileError("unable to resolve function type clang.TypeClass.MacroQualified");
+pub const VK_POINT_CLIPPING_BEHAVIOR_ALL_CLIP_PLANES: c_int = 0;
+pub const VK_POINT_CLIPPING_BEHAVIOR_USER_CLIP_PLANES_ONLY: c_int = 1;
+pub const VK_POINT_CLIPPING_BEHAVIOR_ALL_CLIP_PLANES_KHR: c_int = 0;
+pub const VK_POINT_CLIPPING_BEHAVIOR_USER_CLIP_PLANES_ONLY_KHR: c_int = 1;
+pub const VK_POINT_CLIPPING_BEHAVIOR_MAX_ENUM: c_int = 2147483647;
+pub const enum_VkPointClippingBehavior = c_uint;
+pub const VkPointClippingBehavior = enum_VkPointClippingBehavior;
+pub export var __mingw_current_teb: ?*struct__TEB = @import("std").mem.zeroes(?*struct__TEB);
+pub const VK_KHR_SURFACE_EXTENSION_NAME = "VK_KHR_surface";
+pub const _XcptActTab: [*c]struct__XCPT_ACTION = @extern([*c]struct__XCPT_ACTION, .{
+    .name = "_XcptActTab",
+});
+pub extern const VIRTUAL_STORAGE_TYPE_VENDOR_UNKNOWN: GUID;
+pub extern fn AttachVirtualDisk(VirtualDiskHandle: HANDLE, SecurityDescriptor: PSECURITY_DESCRIPTOR, Flags: ATTACH_VIRTUAL_DISK_FLAG, ProviderSpecificFlags: ULONG, Parameters: PATTACH_VIRTUAL_DISK_PARAMETERS, Overlapped: LPOVERLAPPED) DWORD;
+pub extern fn vkCreateWin32SurfaceKHR(instance: VkInstance, pCreateInfo: [*c]const VkWin32SurfaceCreateInfoKHR, pAllocator: [*c]const VkAllocationCallbacks, pSurface: [*c]VkSurfaceKHR) VkResult;
+pub const struct_IXMLDOMNotationVtbl = extern struct {
+    QueryInterface: ?*const fn ([*c]IXMLDOMNotation, [*c]const IID, [*c]?*anyopaque) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]const IID, [*c]?*anyopaque) callconv(.c) HRESULT),
+    AddRef: ?*const fn ([*c]IXMLDOMNotation) callconv(.c) ULONG = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation) callconv(.c) ULONG),
+    Release: ?*const fn ([*c]IXMLDOMNotation) callconv(.c) ULONG = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation) callconv(.c) ULONG),
+    GetTypeInfoCount: ?*const fn ([*c]IXMLDOMNotation, [*c]UINT) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]UINT) callconv(.c) HRESULT),
+    GetTypeInfo: ?*const fn ([*c]IXMLDOMNotation, UINT, LCID, [*c][*c]ITypeInfo) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, UINT, LCID, [*c][*c]ITypeInfo) callconv(.c) HRESULT),
+    GetIDsOfNames: ?*const fn ([*c]IXMLDOMNotation, [*c]const IID, [*c]LPOLESTR, UINT, LCID, [*c]DISPID) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]const IID, [*c]LPOLESTR, UINT, LCID, [*c]DISPID) callconv(.c) HRESULT),
+    Invoke: ?*const fn ([*c]IXMLDOMNotation, DISPID, [*c]const IID, LCID, WORD, [*c]DISPPARAMS, [*c]VARIANT, [*c]EXCEPINFO, [*c]UINT) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, DISPID, [*c]const IID, LCID, WORD, [*c]DISPPARAMS, [*c]VARIANT, [*c]EXCEPINFO, [*c]UINT) callconv(.c) HRESULT),
+    get_nodeName: ?*const fn ([*c]IXMLDOMNotation, [*c]BSTR) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]BSTR) callconv(.c) HRESULT),
+    get_nodeValue: ?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT) callconv(.c) HRESULT),
+    put_nodeValue: ?*const fn ([*c]IXMLDOMNotation, VARIANT) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, VARIANT) callconv(.c) HRESULT),
+    get_nodeType: ?*const fn ([*c]IXMLDOMNotation, [*c]DOMNodeType) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]DOMNodeType) callconv(.c) HRESULT),
+    get_parentNode: ?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT),
+    get_childNodes: ?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMNodeList) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMNodeList) callconv(.c) HRESULT),
+    get_firstChild: ?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT),
+    get_lastChild: ?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT),
+    get_previousSibling: ?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT),
+    get_nextSibling: ?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT),
+    get_attributes: ?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMNamedNodeMap) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMNamedNodeMap) callconv(.c) HRESULT),
+    insertBefore: ?*const fn ([*c]IXMLDOMNotation, [*c]IXMLDOMNode, VARIANT, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]IXMLDOMNode, VARIANT, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT),
+    replaceChild: ?*const fn ([*c]IXMLDOMNotation, [*c]IXMLDOMNode, [*c]IXMLDOMNode, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]IXMLDOMNode, [*c]IXMLDOMNode, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT),
+    removeChild: ?*const fn ([*c]IXMLDOMNotation, [*c]IXMLDOMNode, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]IXMLDOMNode, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT),
+    appendChild: ?*const fn ([*c]IXMLDOMNotation, [*c]IXMLDOMNode, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]IXMLDOMNode, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT),
+    hasChildNodes: ?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT_BOOL) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT_BOOL) callconv(.c) HRESULT),
+    get_ownerDocument: ?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMDocument) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMDocument) callconv(.c) HRESULT),
+    cloneNode: ?*const fn ([*c]IXMLDOMNotation, VARIANT_BOOL, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, VARIANT_BOOL, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT),
+    get_nodeTypeString: ?*const fn ([*c]IXMLDOMNotation, [*c]BSTR) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]BSTR) callconv(.c) HRESULT),
+    get_text: ?*const fn ([*c]IXMLDOMNotation, [*c]BSTR) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]BSTR) callconv(.c) HRESULT),
+    put_text: ?*const fn ([*c]IXMLDOMNotation, BSTR) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, BSTR) callconv(.c) HRESULT),
+    get_specified: ?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT_BOOL) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT_BOOL) callconv(.c) HRESULT),
+    get_definition: ?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT),
+    get_nodeTypedValue: ?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT) callconv(.c) HRESULT),
+    put_nodeTypedValue: ?*const fn ([*c]IXMLDOMNotation, VARIANT) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, VARIANT) callconv(.c) HRESULT),
+    get_dataType: ?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT) callconv(.c) HRESULT),
+    put_dataType: ?*const fn ([*c]IXMLDOMNotation, BSTR) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, BSTR) callconv(.c) HRESULT),
+    get_xml: ?*const fn ([*c]IXMLDOMNotation, [*c]BSTR) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]BSTR) callconv(.c) HRESULT),
+    transformNode: ?*const fn ([*c]IXMLDOMNotation, [*c]IXMLDOMNode, [*c]BSTR) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]IXMLDOMNode, [*c]BSTR) callconv(.c) HRESULT),
+    selectNodes: ?*const fn ([*c]IXMLDOMNotation, BSTR, [*c][*c]IXMLDOMNodeList) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, BSTR, [*c][*c]IXMLDOMNodeList) callconv(.c) HRESULT),
+    selectSingleNode: ?*const fn ([*c]IXMLDOMNotation, BSTR, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, BSTR, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT),
+    get_parsed: ?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT_BOOL) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT_BOOL) callconv(.c) HRESULT),
+    get_namespaceURI: ?*const fn ([*c]IXMLDOMNotation, [*c]BSTR) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]BSTR) callconv(.c) HRESULT),
+    get_prefix: ?*const fn ([*c]IXMLDOMNotation, [*c]BSTR) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]BSTR) callconv(.c) HRESULT),
+    get_baseName: ?*const fn ([*c]IXMLDOMNotation, [*c]BSTR) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]BSTR) callconv(.c) HRESULT),
+    transformNodeToObject: ?*const fn ([*c]IXMLDOMNotation, [*c]IXMLDOMNode, VARIANT) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]IXMLDOMNode, VARIANT) callconv(.c) HRESULT),
+    get_publicId: ?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT) callconv(.c) HRESULT),
+    get_systemId: ?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT) callconv(.c) HRESULT),
+};
+pub const struct_IMonikerVtbl = extern struct {
+    QueryInterface: ?*const fn ([*c]IMoniker, [*c]const IID, [*c]?*anyopaque) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IMoniker, [*c]const IID, [*c]?*anyopaque) callconv(.c) HRESULT),
+    AddRef: ?*const fn ([*c]IMoniker) callconv(.c) ULONG = @import("std").mem.zeroes(?*const fn ([*c]IMoniker) callconv(.c) ULONG),
+    Release: ?*const fn ([*c]IMoniker) callconv(.c) ULONG = @import("std").mem.zeroes(?*const fn ([*c]IMoniker) callconv(.c) ULONG),
+    GetClassID: ?*const fn ([*c]IMoniker, [*c]CLSID) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IMoniker, [*c]CLSID) callconv(.c) HRESULT),
+    IsDirty: ?*const fn ([*c]IMoniker) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IMoniker) callconv(.c) HRESULT),
+    Load: ?*const fn ([*c]IMoniker, [*c]IStream) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IMoniker, [*c]IStream) callconv(.c) HRESULT),
+    Save: ?*const fn ([*c]IMoniker, [*c]IStream, WINBOOL) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IMoniker, [*c]IStream, WINBOOL) callconv(.c) HRESULT),
+    GetSizeMax: ?*const fn ([*c]IMoniker, [*c]ULARGE_INTEGER) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IMoniker, [*c]ULARGE_INTEGER) callconv(.c) HRESULT),
+    BindToObject: ?*const fn ([*c]IMoniker, [*c]IBindCtx, [*c]IMoniker, [*c]const IID, [*c]?*anyopaque) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IMoniker, [*c]IBindCtx, [*c]IMoniker, [*c]const IID, [*c]?*anyopaque) callconv(.c) HRESULT),
+    BindToStorage: ?*const fn ([*c]IMoniker, [*c]IBindCtx, [*c]IMoniker, [*c]const IID, [*c]?*anyopaque) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IMoniker, [*c]IBindCtx, [*c]IMoniker, [*c]const IID, [*c]?*anyopaque) callconv(.c) HRESULT),
+    Reduce: ?*const fn ([*c]IMoniker, [*c]IBindCtx, DWORD, [*c][*c]IMoniker, [*c][*c]IMoniker) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IMoniker, [*c]IBindCtx, DWORD, [*c][*c]IMoniker, [*c][*c]IMoniker) callconv(.c) HRESULT),
+    ComposeWith: ?*const fn ([*c]IMoniker, [*c]IMoniker, WINBOOL, [*c][*c]IMoniker) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IMoniker, [*c]IMoniker, WINBOOL, [*c][*c]IMoniker) callconv(.c) HRESULT),
+    Enum: ?*const fn ([*c]IMoniker, WINBOOL, [*c][*c]IEnumMoniker) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IMoniker, WINBOOL, [*c][*c]IEnumMoniker) callconv(.c) HRESULT),
+    IsEqual: ?*const fn ([*c]IMoniker, [*c]IMoniker) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IMoniker, [*c]IMoniker) callconv(.c) HRESULT),
+    Hash: ?*const fn ([*c]IMoniker, [*c]DWORD) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IMoniker, [*c]DWORD) callconv(.c) HRESULT),
+    IsRunning: ?*const fn ([*c]IMoniker, [*c]IBindCtx, [*c]IMoniker, [*c]IMoniker) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IMoniker, [*c]IBindCtx, [*c]IMoniker, [*c]IMoniker) callconv(.c) HRESULT),
+    GetTimeOfLastChange: ?*const fn ([*c]IMoniker, [*c]IBindCtx, [*c]IMoniker, [*c]FILETIME) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IMoniker, [*c]IBindCtx, [*c]IMoniker, [*c]FILETIME) callconv(.c) HRESULT),
+    Inverse: ?*const fn ([*c]IMoniker, [*c][*c]IMoniker) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IMoniker, [*c][*c]IMoniker) callconv(.c) HRESULT),
+    CommonPrefixWith: ?*const fn ([*c]IMoniker, [*c]IMoniker, [*c][*c]IMoniker) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IMoniker, [*c]IMoniker, [*c][*c]IMoniker) callconv(.c) HRESULT),
+    RelativePathTo: ?*const fn ([*c]IMoniker, [*c]IMoniker, [*c][*c]IMoniker) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IMoniker, [*c]IMoniker, [*c][*c]IMoniker) callconv(.c) HRESULT),
+    GetDisplayName: ?*const fn ([*c]IMoniker, [*c]IBindCtx, [*c]IMoniker, [*c]LPOLESTR) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IMoniker, [*c]IBindCtx, [*c]IMoniker, [*c]LPOLESTR) callconv(.c) HRESULT),
+    ParseDisplayName: ?*const fn ([*c]IMoniker, [*c]IBindCtx, [*c]IMoniker, LPOLESTR, [*c]ULONG, [*c][*c]IMoniker) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IMoniker, [*c]IBindCtx, [*c]IMoniker, LPOLESTR, [*c]ULONG, [*c][*c]IMoniker) callconv(.c) HRESULT),
+    IsSystemMoniker: ?*const fn ([*c]IMoniker, [*c]DWORD) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IMoniker, [*c]DWORD) callconv(.c) HRESULT),
+};
+pub const struct_VkOffset2D = extern struct {
+    x: i32 = @import("std").mem.zeroes(i32),
+    y: i32 = @import("std").mem.zeroes(i32),
+};
+pub const VkOffset2D = struct_VkOffset2D;
+pub const struct_VkBaseInStructure = extern struct {
+    sType: VkStructureType = @import("std").mem.zeroes(VkStructureType),
+    pNext: [*c]const struct_VkBaseInStructure = @import("std").mem.zeroes([*c]const struct_VkBaseInStructure),
+};
+pub const VkBaseInStructure = struct_VkBaseInStructure;
+const union_unnamed_344 = extern union {
+    hBitmap: HBITMAP,
+    hMetaFilePict: HMETAFILEPICT,
+    hEnhMetaFile: HENHMETAFILE,
+    hGlobal: HGLOBAL,
+    lpszFileName: LPOLESTR,
+    pstm: [*c]IStream,
+    pstg: [*c]IStorage,
+};
+pub const union_VkClearColorValue = extern union {
+    float32: [4]f32,
+    int32: [4]i32,
+    uint32: [4]u32,
+};
+pub const VkClearColorValue = union_VkClearColorValue;
+pub extern var IWinTypesBase_v0_1_c_ifspec: RPC_IF_HANDLE;
 pub const VK_ACCESS_INDIRECT_COMMAND_READ_BIT: c_int = 1;
 pub const VK_ACCESS_INDEX_READ_BIT: c_int = 2;
 pub const VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT: c_int = 4;
@@ -109,69 +223,6 @@ pub const VK_ACCESS_2_MICROMAP_WRITE_BIT_EXT: VkAccessFlagBits2 = 35184372088832
 pub const VK_ACCESS_2_OPTICAL_FLOW_READ_BIT_NV: VkAccessFlagBits2 = 4398046511104;
 pub const VK_ACCESS_2_OPTICAL_FLOW_WRITE_BIT_NV: VkAccessFlagBits2 = 8796093022208;
 pub const VK_SUBMIT_PROTECTED_BIT: c_int = 1;
-pub const VK_SUBMIT_PROTECTED_BIT_KHR: c_int = 1;
-pub const VK_SUBMIT_FLAG_BITS_MAX_ENUM: c_int = 2147483647;
-pub const enum_VkSubmitFlagBits = c_uint;
-pub const VkSubmitFlagBits = enum_VkSubmitFlagBits;
-pub const VkSubmitFlags = VkFlags;
-pub export var __mingw_current_teb: ?*struct__TEB = @import("std").mem.zeroes(?*struct__TEB);
-pub const VK_KHR_SURFACE_EXTENSION_NAME = "VK_KHR_surface";
-pub extern const VIRTUAL_STORAGE_TYPE_VENDOR_UNKNOWN: GUID;
-pub extern fn AttachVirtualDisk(VirtualDiskHandle: HANDLE, SecurityDescriptor: PSECURITY_DESCRIPTOR, Flags: ATTACH_VIRTUAL_DISK_FLAG, ProviderSpecificFlags: ULONG, Parameters: PATTACH_VIRTUAL_DISK_PARAMETERS, Overlapped: LPOVERLAPPED) DWORD;
-pub extern fn vkCreateWin32SurfaceKHR(instance: VkInstance, pCreateInfo: [*c]const VkWin32SurfaceCreateInfoKHR, pAllocator: [*c]const VkAllocationCallbacks, pSurface: [*c]VkSurfaceKHR) VkResult;
-pub const struct_IXMLDOMNotationVtbl = extern struct {
-    QueryInterface: ?*const fn ([*c]IXMLDOMNotation, [*c]const IID, [*c]?*anyopaque) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]const IID, [*c]?*anyopaque) callconv(.c) HRESULT),
-    AddRef: ?*const fn ([*c]IXMLDOMNotation) callconv(.c) ULONG = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation) callconv(.c) ULONG),
-    Release: ?*const fn ([*c]IXMLDOMNotation) callconv(.c) ULONG = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation) callconv(.c) ULONG),
-    GetTypeInfoCount: ?*const fn ([*c]IXMLDOMNotation, [*c]UINT) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]UINT) callconv(.c) HRESULT),
-    GetTypeInfo: ?*const fn ([*c]IXMLDOMNotation, UINT, LCID, [*c][*c]ITypeInfo) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, UINT, LCID, [*c][*c]ITypeInfo) callconv(.c) HRESULT),
-    GetIDsOfNames: ?*const fn ([*c]IXMLDOMNotation, [*c]const IID, [*c]LPOLESTR, UINT, LCID, [*c]DISPID) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]const IID, [*c]LPOLESTR, UINT, LCID, [*c]DISPID) callconv(.c) HRESULT),
-    Invoke: ?*const fn ([*c]IXMLDOMNotation, DISPID, [*c]const IID, LCID, WORD, [*c]DISPPARAMS, [*c]VARIANT, [*c]EXCEPINFO, [*c]UINT) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, DISPID, [*c]const IID, LCID, WORD, [*c]DISPPARAMS, [*c]VARIANT, [*c]EXCEPINFO, [*c]UINT) callconv(.c) HRESULT),
-    get_nodeName: ?*const fn ([*c]IXMLDOMNotation, [*c]BSTR) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]BSTR) callconv(.c) HRESULT),
-    get_nodeValue: ?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT) callconv(.c) HRESULT),
-    put_nodeValue: ?*const fn ([*c]IXMLDOMNotation, VARIANT) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, VARIANT) callconv(.c) HRESULT),
-    get_nodeType: ?*const fn ([*c]IXMLDOMNotation, [*c]DOMNodeType) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]DOMNodeType) callconv(.c) HRESULT),
-    get_parentNode: ?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT),
-    get_childNodes: ?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMNodeList) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMNodeList) callconv(.c) HRESULT),
-    get_firstChild: ?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT),
-    get_lastChild: ?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT),
-    get_previousSibling: ?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT),
-    get_nextSibling: ?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT),
-    get_attributes: ?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMNamedNodeMap) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMNamedNodeMap) callconv(.c) HRESULT),
-    insertBefore: ?*const fn ([*c]IXMLDOMNotation, [*c]IXMLDOMNode, VARIANT, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]IXMLDOMNode, VARIANT, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT),
-    replaceChild: ?*const fn ([*c]IXMLDOMNotation, [*c]IXMLDOMNode, [*c]IXMLDOMNode, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]IXMLDOMNode, [*c]IXMLDOMNode, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT),
-    removeChild: ?*const fn ([*c]IXMLDOMNotation, [*c]IXMLDOMNode, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]IXMLDOMNode, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT),
-    appendChild: ?*const fn ([*c]IXMLDOMNotation, [*c]IXMLDOMNode, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]IXMLDOMNode, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT),
-    hasChildNodes: ?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT_BOOL) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT_BOOL) callconv(.c) HRESULT),
-    get_ownerDocument: ?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMDocument) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMDocument) callconv(.c) HRESULT),
-    cloneNode: ?*const fn ([*c]IXMLDOMNotation, VARIANT_BOOL, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, VARIANT_BOOL, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT),
-    get_nodeTypeString: ?*const fn ([*c]IXMLDOMNotation, [*c]BSTR) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]BSTR) callconv(.c) HRESULT),
-    get_text: ?*const fn ([*c]IXMLDOMNotation, [*c]BSTR) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]BSTR) callconv(.c) HRESULT),
-    put_text: ?*const fn ([*c]IXMLDOMNotation, BSTR) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, BSTR) callconv(.c) HRESULT),
-    get_specified: ?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT_BOOL) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT_BOOL) callconv(.c) HRESULT),
-    get_definition: ?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT),
-    get_nodeTypedValue: ?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT) callconv(.c) HRESULT),
-    put_nodeTypedValue: ?*const fn ([*c]IXMLDOMNotation, VARIANT) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, VARIANT) callconv(.c) HRESULT),
-    get_dataType: ?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT) callconv(.c) HRESULT),
-    put_dataType: ?*const fn ([*c]IXMLDOMNotation, BSTR) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, BSTR) callconv(.c) HRESULT),
-    get_xml: ?*const fn ([*c]IXMLDOMNotation, [*c]BSTR) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]BSTR) callconv(.c) HRESULT),
-    transformNode: ?*const fn ([*c]IXMLDOMNotation, [*c]IXMLDOMNode, [*c]BSTR) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]IXMLDOMNode, [*c]BSTR) callconv(.c) HRESULT),
-    selectNodes: ?*const fn ([*c]IXMLDOMNotation, BSTR, [*c][*c]IXMLDOMNodeList) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, BSTR, [*c][*c]IXMLDOMNodeList) callconv(.c) HRESULT),
-    selectSingleNode: ?*const fn ([*c]IXMLDOMNotation, BSTR, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, BSTR, [*c][*c]IXMLDOMNode) callconv(.c) HRESULT),
-    get_parsed: ?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT_BOOL) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT_BOOL) callconv(.c) HRESULT),
-    get_namespaceURI: ?*const fn ([*c]IXMLDOMNotation, [*c]BSTR) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]BSTR) callconv(.c) HRESULT),
-    get_prefix: ?*const fn ([*c]IXMLDOMNotation, [*c]BSTR) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]BSTR) callconv(.c) HRESULT),
-    get_baseName: ?*const fn ([*c]IXMLDOMNotation, [*c]BSTR) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]BSTR) callconv(.c) HRESULT),
-    transformNodeToObject: ?*const fn ([*c]IXMLDOMNotation, [*c]IXMLDOMNode, VARIANT) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]IXMLDOMNode, VARIANT) callconv(.c) HRESULT),
-    get_publicId: ?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT) callconv(.c) HRESULT),
-    get_systemId: ?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT) callconv(.c) HRESULT),
-};
-pub const struct_VkOffset2D = extern struct {
-    x: i32 = @import("std").mem.zeroes(i32),
-    y: i32 = @import("std").mem.zeroes(i32),
-};
-pub const VkOffset2D = struct_VkOffset2D;
-pub extern var IWinTypesBase_v0_1_c_ifspec: RPC_IF_HANDLE;
 pub fn _MarkAllocaS(arg__Ptr: ?*anyopaque, arg__Marker: c_uint) callconv(.c) ?*anyopaque {
     var _Ptr = arg__Ptr;
     _ = &_Ptr;
@@ -205,9 +256,15 @@ pub const struct_VkBuffer_T = opaque {};
 pub const VkBuffer = ?*struct_VkBuffer_T;
 pub const PFN_vkAllocationFunction = ?*const fn (?*anyopaque, usize, usize, VkSystemAllocationScope) callconv(.c) ?*anyopaque;
 pub const VK_KHR_SURFACE_SPEC_VERSION = @as(c_int, 25);
+pub const DWORD = c_ulong;
+pub const PVOID = ?*anyopaque;
+pub const ULONG_PTR = c_ulonglong;
+pub const DWORD64 = c_ulonglong;
+pub const VK_UUID_SIZE = @as(c_uint, 16);
 pub const VkBool32 = u32;
 pub const VkDeviceAddress = u64;
 pub const VkDeviceSize = u64;
 pub const VkFlags = u32;
+pub const VkFlags64 = u64;
 pub const VkSampleMask = u32;
-pub const VK_UUID_SIZE = @as(c_uint, 16);
+pub const VkDeviceCreateFlags = VkFlags;
