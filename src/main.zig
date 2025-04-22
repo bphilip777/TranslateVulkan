@@ -4,18 +4,18 @@ const trimRight = std.mem.trimRight;
 const eql = std.mem.eql;
 const TextData = @import("TextData.zig");
 
-// pub fn main() !void {
-//     var da = std.heap.DebugAllocator(.{}){};
-//     const allo = da.allocator();
-//     defer std.debug.assert(.ok == da.deinit());
-//
-//     const src_path = "src/translated_vulkan.zig";
-//     const dst_path = "src/vulkan.zig";
-//
-//     var text = try TextData.init(allo, src_path, dst_path);
-//     defer text.deinit();
-//     try text.parse();
-// }
+pub fn main() !void {
+    var da = std.heap.DebugAllocator(.{}){};
+    const allo = da.allocator();
+    defer std.debug.assert(.ok == da.deinit());
+
+    const src_path = "src/translated_vulkan.zig";
+    const dst_path = "src/vulkan.zig";
+
+    var text = try TextData.init(allo, src_path, dst_path);
+    defer text.deinit();
+    try text.parse();
+}
 
 test "Processing Vulkan File" {
     const allo = std.testing.allocator;
