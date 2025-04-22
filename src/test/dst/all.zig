@@ -171,8 +171,8 @@ pub const PVOID = ?*anyopaque;
 pub const ULONG_PTR = c_ulonglong;
 pub const DWORD64 = c_ulonglong;
 pub const Bool32 = enum(u32) {
- false = 0,
- true = 1,
+    false = 0,
+    true = 1,
  };
 pub const DeviceAddress = u64;
 pub const DeviceSize = u64;
@@ -181,11 +181,11 @@ pub const Flags64 = u64;
 pub const SampleMask = u32;
 pub const DeviceCreateFlags = Flags;
 pub const TypeNames = struct {
-uuid_size: u32 = 16,
+    uuid_size: u32 = 16,
 };
 pub const ExtensionNames = struct {
-    surface:"VK_KHR_surface",
+    surface: "VK_KHR_surface",
 };
 pub const SpecVersions = struct {
-    surface:i32 = 25,
+    surface: i32 = 25,
 };

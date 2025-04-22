@@ -92,10 +92,10 @@ pub fn parse(self: *TextData) !void {
     const len = self.data.len;
     while (start < len) {
         const line = self.getNextLine(start);
-        print("Line: {s}\n", .{line});
+        // print("Line: {s}\n", .{line});
         start = self.getNextStart(start);
         const linetype = determineLineType(line) orelse continue;
-        print("Line Type: {s}\n", .{@tagName(linetype)});
+        // print("Line Type: {s}\n", .{@tagName(linetype)});
 
         switch (linetype) {
             .inline_fn_vk => start = (try self.processInlineFnVk(start)),
@@ -496,7 +496,7 @@ fn processTypeName(self: *TextData, idx: usize) !void {
 fn writeTypeNames(self: *const TextData) !void {
     try self.write("pub const TypeNames = struct {");
     for (self.type_names.items) |tn| {
-        const newline = try allocPrint(self.allo, "{s} = {s},", .{ tn.name, tn.value });
+        const newline = try allocPrint(self.allo, "    {s} = {s},", .{ tn.name, tn.value });
         defer self.allo.free(newline);
         try self.write(newline);
     }
@@ -519,11 +519,7 @@ fn processExtensionName(self: *TextData, idx: usize) !void {
 fn writeExtensionNames(self: *const TextData) !void {
     try self.write("pub const ExtensionNames = struct {");
     for (self.extension_names.items) |en| {
-        const newline = try allocPrint(
-            self.allo,
-            "    {s}:{s},",
-            .{ en.name, en.value },
-        );
+        const newline = try allocPrint(self.allo, "    {s}: {s},", .{ en.name, en.value });
         defer self.allo.free(newline);
         try self.write(newline);
     }
@@ -531,7 +527,6 @@ fn writeExtensionNames(self: *const TextData) !void {
 }
 
 fn processSpecVersion(self: *TextData, idx: usize) !void {
-    // lots of edge cases
     const line = self.getPrevLine(idx);
     const name = getName(line, &.{ "VK_KHR_", "VK_" }, &.{"_SPEC_VERSION"});
     const snake_name = try cc.convert(self.allo, name, .snake);
@@ -542,7 +537,7 @@ fn processSpecVersion(self: *TextData, idx: usize) !void {
     const type_name = if (eql(u8, tname, "c_uint")) "u32" else "i32";
     const new_field_name = try allocPrint(
         self.allo,
-        "{s}:{s}",
+        "{s}: {s}",
         .{ snake_name1, type_name },
     );
     const new_field_value = try self.allo.dupe(u8, getValue(line, &.{}, &.{}));
@@ -957,7 +952,7 @@ fn processFlag1(self: *const TextData, idx: usize) !usize {
     try self.write("};");
 
     line = self.getNextLine(start);
-    print("Line: {s}\n", .{line});
+    // print("Line: {s}\n", .{line});
     start = self.getNextStart(start);
     return start;
 }
@@ -990,7 +985,7 @@ fn processFlag2(self: *const TextData, idx: usize) !usize {
         }
     }
     defer for (title_words.items) |title_word| self.allo.free(title_word);
-    for (title_words.items) |title_word| print("Title Word: {s}\n", .{title_word});
+    // for (title_words.items) |title_word| print("Title Word: {s}\n", .{title_word});
 
     var start = idx;
     while (true) {
@@ -1086,7 +1081,7 @@ fn processTypeVk(self: *const TextData, idx: usize) !void {
     const line = self.getPrevLine(idx);
     const name = getName(line, &.{"Vk"}, &.{});
     if (eql(u8, name, "Bool32")) {
-        try self.write("pub const Bool32 = enum(u32) {\n false = 0,\n true = 1,\n };");
+        try self.write("pub const Bool32 = enum(u32) {\n    false = 0,\n    true = 1,\n };");
         return;
     }
     const value = getValue(line, &.{"Vk"}, &.{});
