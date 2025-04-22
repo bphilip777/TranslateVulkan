@@ -47,8 +47,9 @@ pub fn main() !void {
         // "compile_error",
         // "enum",
         // "flag1",
-        "flag2",
+        // "flag2",
         // "type",
+        "type_vk",
         // "unknown",
         // "all",
     };

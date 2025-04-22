@@ -92,8 +92,10 @@ pub fn parse(self: *TextData) !void {
     const len = self.data.len;
     while (start < len) {
         const line = self.getNextLine(start);
+        print("Line: {s}\n", .{line});
         start = self.getNextStart(start);
         const linetype = determineLineType(line) orelse continue;
+        print("Line Type: {s}\n", .{@tagName(linetype)});
 
         switch (linetype) {
             .inline_fn_vk => start = (try self.processInlineFnVk(start)),
@@ -1087,8 +1089,9 @@ fn processTypeVk(self: *const TextData, idx: usize) !void {
         try self.write("pub const Bool32 = enum(u32) {\n false = 0,\n true = 1,\n };");
         return;
     }
-    const old_name = getName(line, &.{}, &.{});
-    const newline = try std.mem.replaceOwned(u8, self.allo, line, old_name, name);
+    const value = getValue(line, &.{"Vk"}, &.{});
+    // print("Name: {s}, Value: {s}\n", .{ name, value });
+    const newline = try std.fmt.allocPrint(self.allo, "pub const {s} = {s};", .{ name, value });
     defer self.allo.free(newline);
     try self.write(newline);
 }
