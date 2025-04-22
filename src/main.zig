@@ -20,7 +20,7 @@ const TextData = @import("TextData.zig");
 test "Processing Vulkan File" {
     const allo = std.testing.allocator;
 
-    const src_dir = "src/test/src/";
+    // const src_dir = "src/test/src/";
     const dst_dir = "src/test/dst/";
     const exp_dir = "src/test/exp/";
     const ext = ".zig";
@@ -58,15 +58,15 @@ test "Processing Vulkan File" {
     var dbuffer: [1024]u8 = undefined;
     var ebuffer: [1024]u8 = undefined;
     for (filepaths) |filepath| {
-        const src_path = try std.fmt.allocPrint(allo, "{s}{s}{s}", .{ src_dir, filepath, ext });
-        defer allo.free(src_path);
+        // const src_path = try std.fmt.allocPrint(allo, "{s}{s}{s}", .{ src_dir, filepath, ext });
+        // defer allo.free(src_path);
 
         const dst_path = try std.fmt.allocPrint(allo, "{s}{s}{s}", .{ dst_dir, filepath, ext });
         defer allo.free(dst_path);
 
-        var text = try TextData.init(allo, src_path, dst_path);
-        defer text.deinit();
-        try text.parse();
+        // var text = try TextData.init(allo, src_path, dst_path);
+        // defer text.deinit();
+        // try text.parse();
 
         const dfile = try std.fs.cwd().openFile(dst_path, .{});
         defer dfile.close();

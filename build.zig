@@ -13,7 +13,6 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-
     const exe = b.addExecutable(.{
         .name = "TranslateVulkan",
         .root_module = exe_mod,
@@ -24,7 +23,6 @@ pub fn build(b: *std.Build) void {
     exe.addIncludePath(b.path("Vulkan/Include"));
     exe.root_module.addImport("BitTricks", BitTricks.module("BitTricks"));
     exe.root_module.addImport("CodingCase", CodingCase.module("CodingCase"));
-
     b.installArtifact(exe);
 
     const run_cmd = b.addRunArtifact(exe);
@@ -38,6 +36,8 @@ pub fn build(b: *std.Build) void {
     run_step.dependOn(&run_cmd.step);
 
     const exe_unit_tests = b.addTest(.{
+        .target = target,
+        .optimize = optimize,
         .root_module = exe_mod,
         .link_libc = true,
     });
@@ -46,6 +46,7 @@ pub fn build(b: *std.Build) void {
     exe_unit_tests.addIncludePath(b.path("Vulkan/Include"));
     exe_unit_tests.root_module.addImport("BitTricks", BitTricks.module("BitTricks"));
     exe_unit_tests.root_module.addImport("CodingCase", CodingCase.module("CodingCase"));
+    b.installArtifact(exe_unit_tests);
 
     const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
     const test_step = b.step("test", "Run unit tests");
