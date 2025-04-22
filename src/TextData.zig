@@ -36,7 +36,7 @@ pub fn init(
     wfilename: []const u8,
 ) !TextData {
     const rfile = std.fs.cwd().openFile(rfilename, .{}) catch |err| {
-        std.debug.print("File: {s}\n", .{rfilename});
+        print("File: {s}\n", .{rfilename});
         return err;
     };
     defer rfile.close();
@@ -201,9 +201,9 @@ fn determineLineType(line: []const u8) ?LineType {
     if (isExternStructVk(line2)) return .extern_struct_vk;
     if (isExternStruct(line2)) return .extern_struct;
     if (isSkip(line2)) return null;
-    if (isEnum(line2)) return .@"enum";
     if (isFlag1(line2)) return .flag1;
     if (isFlag2(line2)) return .flag2;
+    if (isEnum(line2)) return .@"enum";
     if (isTypeVk(line2)) return .type_vk;
     if (isType(line2)) return .type;
     return .base;
@@ -332,9 +332,9 @@ fn isFlag1(line: []const u8) bool {
 fn isFlag2(line: []const u8) bool {
     const space_idx = indexOfScalar(u8, line, ' ').?;
     const name = line[0..space_idx];
-    const is_enum = isEnum(line);
-    const is_flag2 = endsWith(u8, name, "FlagBitsKHR2") or endsWith(u8, name, "FlagBits2");
-    return is_enum and is_flag2;
+    const is_flag2 = endsWith(u8, name, "Flags2");
+    const is_flags64 = endsWith(u8, line, "VkFlags64;");
+    return is_flag2 and is_flags64;
 }
 
 fn isEnum(line: []const u8) bool {
@@ -783,7 +783,6 @@ fn processEnum(self: *const TextData, idx: usize) !usize {
         var name_words = try cc.split2Words(self.allo, new_name);
         defer name_words.deinit();
         defer for (name_words.items) |name_word| self.allo.free(name_word);
-        for (name_words.items) |name_word| print("{s} ", .{name_word});
 
         const matches = try getMatches(self.allo, name_words, title_words);
         defer self.allo.free(matches);
@@ -843,7 +842,6 @@ fn processEnum(self: *const TextData, idx: usize) !usize {
     try self.write("};");
 
     line = self.getNextLine(idx);
-    print("Line: {s}\n", .{line});
     const start = self.getNextStart(idx);
     return start;
 }
@@ -857,7 +855,6 @@ fn processFlag1(self: *const TextData, idx: usize) !usize {
     line = self.getNextLine(idx);
     var start = self.getNextStart(idx);
     const title_name = getName(line, &.{"Vk"}, &.{ "FlagBitsKHR", "FlagBits" });
-    print("Title Name: {s}\n", .{title_name});
     const title_line = try allocPrint(
         self.allo,
         "pub const {s}Flags = enum({s}) {{",
@@ -957,13 +954,14 @@ fn processFlag1(self: *const TextData, idx: usize) !usize {
     }
     try self.write("};");
 
+    line = self.getNextLine(start);
+    print("Line: {s}\n", .{line});
     start = self.getNextStart(start);
     return start;
 }
 
 fn processFlag2(self: *const TextData, idx: usize) !usize {
     var line = self.getPrevLine(idx);
-    var start = self.getNextStart(idx);
 
     const title_name = getName(line, &.{"Vk"}, &.{});
     const title_type = if (eql(u8, getValue(line, &.{}, &.{}), "c_uint")) "u32" else "i32";
@@ -990,7 +988,9 @@ fn processFlag2(self: *const TextData, idx: usize) !usize {
         }
     }
     defer for (title_words.items) |title_word| self.allo.free(title_word);
+    for (title_words.items) |title_word| print("Title Word: {s}\n", .{title_word});
 
+    var start = idx;
     while (true) {
         line = self.getNextLine(start);
         if (indexOfScalar(u8, line, ':') != null) break;
@@ -1076,6 +1076,7 @@ fn processFlag2(self: *const TextData, idx: usize) !usize {
         try self.write(newline);
     }
     try self.write("};");
+
     return start;
 }
 
@@ -1307,6 +1308,7 @@ fn getNextLine(self: *const TextData, start: usize) []const u8 {
 }
 
 fn getNextStart(self: *const TextData, start: usize) usize {
+    // TODO - determine whether to use this or have safety for end of line
     return start +% self.getEndOfCurrLine(start) +% 1;
 }
 
