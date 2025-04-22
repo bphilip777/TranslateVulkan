@@ -1081,7 +1081,7 @@ fn processTypeVk(self: *const TextData, idx: usize) !void {
     const line = self.getPrevLine(idx);
     const name = getName(line, &.{"Vk"}, &.{});
     if (eql(u8, name, "Bool32")) {
-        try self.write("pub const Bool32 = enum(u32) {\n    false = 0,\n    true = 1,\n };");
+        try self.write("pub const Bool32 = enum(u32) {\n    false = 0,\n    true = 1,\n};");
         return;
     }
     const value = getValue(line, &.{"Vk"}, &.{});

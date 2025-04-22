@@ -1,8 +1,4 @@
-pub const Bool32 = enum(u32) {
-    false = 0,
-    true = 1,
-};
-pub const DeviceAddress = u64;
-pub const DeviceSize = u64;
-pub const Flags = u32;
-pub const SampleMask = u32;
+pub const DWORD = c_ulong;
+pub const PVOID = ?*anyopaque;
+pub const ULONG_PTR = c_ulonglong;
+pub const DWORD64 = c_ulonglong;

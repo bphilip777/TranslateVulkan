@@ -1,1 +1,1 @@
-pub const Buffer = enum(u64) { null = 0, _ };
+pub const struct_threadmbcinfostruct = opaque {};
