@@ -4,6 +4,10 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    // dependencies:
+    const BitTricks = b.dependency("BitTricks", .{});
+    const codingcase = b.dependency("CodingCase", .{});
+
     const exe_mod = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
@@ -16,17 +20,11 @@ pub fn build(b: *std.Build) void {
     });
     exe.linkLibC();
 
-    // vulkan
+    // add deps to exe
     exe.root_module.addLibraryPath(b.path("Vulkan/Lib"));
     exe.root_module.linkSystemLibrary("vulkan-1", .{});
     exe.addIncludePath(b.path("Vulkan/Include"));
-
-    // BitTricks
-    const BitTricks = b.dependency("BitTricks", .{});
     exe.root_module.addImport("BitTricks", BitTricks.module("BitTricks"));
-
-    // CodingCase
-    const codingcase = b.dependency("CodingCase", .{});
     exe.root_module.addImport("CodingCase", codingcase.module("CodingCase"));
 
     b.installArtifact(exe);
@@ -43,6 +41,12 @@ pub fn build(b: *std.Build) void {
     const exe_unit_tests = b.addTest(.{
         .root_module = exe_mod,
     });
+    exe_unit_tests.linkLibC();
+    exe_unit_tests.root_module.addLibraryPath(b.path("Vulkan/Lib"));
+    exe_unit_tests.root_module.linkSystemLibrary("vulkan-1", .{});
+    exe_unit_tests.addIncludePath(b.path("Vulkan/Include"));
+    exe_unit_tests.root_module.addImport("BitTricks", BitTricks.module("BitTricks"));
+    exe_unit_tests.root_module.addImport("CodingCase", codingcase.module("CodingCase"));
 
     const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
     const test_step = b.step("test", "Run unit tests");
