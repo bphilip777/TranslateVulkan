@@ -49,6 +49,17 @@ pub const AccessFlags2 = enum(i32) {
     host_write_bit = 16384,
     memory_read_bit = 32768,
     memory_write_bit = 65536,
+    command_preprocess_read_bit_nv = 131072,
+    command_preprocess_write_bit_nv = 262144,
+    color_attachment_read_noncoherent_bit_ext = 524288,
+    conditional_rendering_read_bit_ext = 1048576,
+    acceleration_structure_read_bit_nv = 2097152,
+    acceleration_structure_write_bit_nv = 4194304,
+    shading_rate_image_read_bit_nv = 8388608,
+    fragment_density_map_read_bit_ext = 16777216,
+    transform_feedback_write_bit_ext = 33554432,
+    transform_feedback_counter_read_bit_ext = 67108864,
+    transform_feedback_counter_write_bit_ext = 134217728,
     shader_sampled_read_bit = 4294967296,
     shader_storage_read_bit = 8589934592,
     shader_storage_write_bit = 17179869184,
@@ -56,24 +67,13 @@ pub const AccessFlags2 = enum(i32) {
     video_decode_write_bit_khr = 68719476736,
     video_encode_read_bit_khr = 137438953472,
     video_encode_write_bit_khr = 274877906944,
-    transform_feedback_write_bit_ext = 33554432,
-    transform_feedback_counter_read_bit_ext = 67108864,
-    transform_feedback_counter_write_bit_ext = 134217728,
-    conditional_rendering_read_bit_ext = 1048576,
-    command_preprocess_read_bit_nv = 131072,
-    command_preprocess_write_bit_nv = 262144,
-    shading_rate_image_read_bit_nv = 8388608,
-    acceleration_structure_read_bit_nv = 2097152,
-    acceleration_structure_write_bit_nv = 4194304,
-    fragment_density_map_read_bit_ext = 16777216,
-    color_attachment_read_noncoherent_bit_ext = 524288,
-    descriptor_buffer_read_bit_ext = 2199023255552,
     invocation_mask_read_bit_huawei = 549755813888,
     shader_binding_table_read_bit_khr = 1099511627776,
-    micromap_read_bit_ext = 17592186044416,
-    micromap_write_bit_ext = 35184372088832,
+    descriptor_buffer_read_bit_ext = 2199023255552,
     optical_flow_read_bit_nv = 4398046511104,
     optical_flow_write_bit_nv = 8796093022208,
+    micromap_read_bit_ext = 17592186044416,
+    micromap_write_bit_ext = 35184372088832,
 };
 pub const SubmitFlags = enum(u32) {
     protected_bit = 1,
@@ -116,22 +116,23 @@ pub inline fn makeApiVersion(variant: anytype, major: anytype, minor: anytype, p
     _ = &patch;
     return (((@import("std").zig.c_translation.cast(u32, variant) << @as(c_uint, 29)) | (@import("std").zig.c_translation.cast(u32, major) << @as(c_uint, 22))) | (@import("std").zig.c_translation.cast(u32, minor) << @as(c_uint, 12))) | @import("std").zig.c_translation.cast(u32, patch);
 }
+pub const struct_threadmbcinfostruct = opaque {};
 pub const Buffer = enum(u64) { null = 0, _ };
 pub const PFN_AllocationFunction = ?*const fn (?*anyopaque, usize, usize, SystemAllocationScope) callconv(.c) ?*anyopaque;
 pub const Bool32 = enum(u32) {
-    false = 0,
-    true = 1,
-};
+ false = 0,
+ true = 1,
+ };
 pub const DeviceAddress = u64;
 pub const DeviceSize = u64;
 pub const Flags = u32;
 pub const SampleMask = u32;
-pub const TypeName = struct {
-    uuid_size: u32 = 16,
+pub const TypeNames = struct {
+uuid_size: u32 = 16,
 };
 pub const ExtensionNames = struct {
-    surface: "VK_KHR_surface",
+    surface:"VK_KHR_surface",
 };
-pub const SpecVersion = struct {
-    surface: i32 = 25,
+pub const SpecVersions = struct {
+    surface:i32 = 25,
 };
