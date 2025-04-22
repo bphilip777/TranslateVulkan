@@ -11,6 +11,7 @@ const trimRight = std.mem.trimRight;
 const isDigit = std.ascii.isDigit;
 const replaceOwned = std.mem.replaceOwned;
 const allocPrint = std.fmt.allocPrint;
+const print = std.debug.print;
 
 const builtin = @import("builtin");
 const newline_chars = if (builtin.os.tag == .windows) "\r\n" else "\n";
@@ -739,8 +740,110 @@ fn processExternStruct(self: *const TextData, idx: usize) !usize {
 }
 
 fn processEnum(self: *const TextData, idx: usize) !usize {
-    const prev_line = self.getPrevLine(idx);
-    std.debug.print("Prev Line: {s}\n", .{prev_line});
+    var line = self.getPrevLine(idx);
+    const title_name = getName(line, &.{"enum_Vk"}, &.{});
+    const title_value = if (eql(u8, getValue(line, &.{}, &.{}), "c_uint")) "u32" else "i32";
+
+    const new_line = try allocPrint(
+        self.allo,
+        "pub const {s} = enum({s}) {{",
+        .{ title_name, title_value },
+    );
+    defer self.allo.free(new_line);
+    try self.write(new_line);
+
+    const title_words = try cc.split2Words(self.allo, title_name);
+    defer title_words.deinit();
+    defer for (title_words.items) |title_word| self.allo.free(title_word);
+
+    var fields = std.ArrayList(NameValue).init(self.allo);
+    defer fields.deinit();
+    defer {
+        for (fields.items) |field| {
+            self.allo.free(field.name);
+            self.allo.free(field.value);
+        }
+    }
+
+    var unique_names = std.StringHashMap(void).init(self.allo);
+    defer unique_names.deinit();
+
+    var unique_values = std.StringHashMap(usize).init(self.allo);
+    defer unique_values.deinit();
+
+    var curr = self.getPrevStart(idx);
+    while (curr > 0) {
+        line = self.getPrevLine(curr);
+        curr = self.getPrevStart(curr);
+
+        const ssn = getScreamingSnakeName(line, &.{"VK_"}, &.{}) orelse break;
+        const new_name = try cc.convert(self.allo, ssn, .snake);
+        defer self.allo.free(new_name);
+
+        var name_words = try cc.split2Words(self.allo, new_name);
+        defer name_words.deinit();
+        defer for (name_words.items) |name_word| self.allo.free(name_word);
+        for (name_words.items) |name_word| print("{s} ", .{name_word});
+
+        const matches = try getMatches(self.allo, name_words, title_words);
+        defer self.allo.free(matches);
+        if (!anyMatches(matches)) break;
+
+        for (0..matches.len) |i| {
+            const j = matches.len -% i -% 1;
+            if (!matches[j]) continue;
+            const word = name_words.orderedRemove(j);
+            self.allo.free(word);
+        }
+
+        const temp_field_name = if (name_words.items.len > 0) try cc.words2Snake(self.allo, name_words) else try self.allo.dupe(u8, "_base");
+        defer self.allo.free(temp_field_name);
+
+        const new_field_name = try prefixWithAt(self.allo, temp_field_name);
+        const new_field_value = try self.allo.dupe(u8, getValue(line, &.{}, &.{}));
+
+        if (unique_names.get(new_field_name)) |_| {
+            self.allo.free(new_field_name);
+            self.allo.free(new_field_value);
+            continue;
+        }
+
+        if (unique_values.get(new_field_value)) |fil| {
+            const old_field_name = fields.items[fil].name;
+            if (old_field_name.len > new_field_name.len) {
+                _ = unique_names.remove(old_field_name);
+                self.allo.free(fields.items[fil].name);
+                fields.items[fil].name = new_field_name;
+            } else {
+                self.allo.free(new_field_name);
+            }
+            self.allo.free(new_field_value);
+            continue;
+        }
+
+        try unique_names.put(new_field_name, {});
+        try unique_values.put(new_field_value, fields.items.len);
+        try fields.append(.{
+            .name = new_field_name,
+            .value = new_field_value,
+        });
+    }
+
+    try sort(&fields);
+
+    for (fields.items) |field| {
+        const field_line = try allocPrint(
+            self.allo,
+            "    {s} = {s},",
+            .{ field.name, field.value },
+        );
+        defer self.allo.free(field_line);
+        try self.write(field_line);
+    }
+    try self.write("};");
+
+    line = self.getNextLine(idx);
+    print("Line: {s}\n", .{line});
     const start = self.getNextStart(idx);
     return start;
 }
@@ -754,6 +857,7 @@ fn processFlag1(self: *const TextData, idx: usize) !usize {
     line = self.getNextLine(idx);
     var start = self.getNextStart(idx);
     const title_name = getName(line, &.{"Vk"}, &.{ "FlagBitsKHR", "FlagBits" });
+    print("Title Name: {s}\n", .{title_name});
     const title_line = try allocPrint(
         self.allo,
         "pub const {s}Flags = enum({s}) {{",
@@ -840,23 +944,7 @@ fn processFlag1(self: *const TextData, idx: usize) !usize {
         });
     }
 
-    for (0..fields.items.len -% 1) |i| {
-        for (i +% 1..fields.items.len) |j| {
-            if (fields.items[i].value.len > fields.items[j].value.len) {
-                const tmp = fields.items[i];
-                fields.items[i] = fields.items[j];
-                fields.items[j] = tmp;
-            } else {
-                const v1 = try std.fmt.parseInt(i128, fields.items[i].value, 10);
-                const v2 = try std.fmt.parseInt(i128, fields.items[j].value, 10);
-                if (v1 > v2) {
-                    const tmp = fields.items[i];
-                    fields.items[i] = fields.items[j];
-                    fields.items[j] = tmp;
-                }
-            }
-        }
-    }
+    try sort(&fields);
 
     for (fields.items) |field| {
         const field_line = try allocPrint(
@@ -869,12 +957,7 @@ fn processFlag1(self: *const TextData, idx: usize) !usize {
     }
     try self.write("};");
 
-    line = self.getNextLine(start);
-    const new_name = getName(line, &.{"Vk"}, &.{"Flags"});
-    if (eql(u8, new_name, title_name)) {
-        start = self.getNextStart(start);
-    }
-
+    start = self.getNextStart(start);
     return start;
 }
 
@@ -981,6 +1064,8 @@ fn processFlag2(self: *const TextData, idx: usize) !usize {
         });
     }
 
+    try sort(&fields);
+
     for (fields.items) |field| {
         const newline = try allocPrint(
             self.allo,
@@ -991,13 +1076,6 @@ fn processFlag2(self: *const TextData, idx: usize) !usize {
         try self.write(newline);
     }
     try self.write("};");
-
-    line = self.getNextLine(start);
-    const new_name = getName(line, &.{"Vk"}, &.{"Flags"});
-    if (eql(u8, new_name, title_name)) {
-        start = self.getNextStart(start);
-    }
-
     return start;
 }
 
@@ -1321,4 +1399,24 @@ fn isKeyword(word: []const u8) bool {
 fn prefixWithAt(allo: Allocator, data: []const u8) ![]const u8 {
     if (isKeyword(data) or isDigit(data[0])) return try allocPrint(allo, "@\"{s}\"", .{data});
     return try allo.dupe(u8, data);
+}
+
+fn sort(fields: *std.ArrayList(NameValue)) !void {
+    for (0..fields.items.len -% 1) |i| {
+        for (i +% 1..fields.items.len) |j| {
+            if (fields.items[i].value.len > fields.items[j].value.len) {
+                const tmp = fields.items[i];
+                fields.items[i] = fields.items[j];
+                fields.items[j] = tmp;
+            } else {
+                const v1 = try std.fmt.parseInt(i128, fields.items[i].value, 10);
+                const v2 = try std.fmt.parseInt(i128, fields.items[j].value, 10);
+                if (v1 > v2) {
+                    const tmp = fields.items[i];
+                    fields.items[i] = fields.items[j];
+                    fields.items[j] = tmp;
+                }
+            }
+        }
+    }
 }
