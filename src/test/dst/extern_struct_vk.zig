@@ -4,5 +4,5 @@ pub const Offset2D = extern struct {
 };
 pub const BaseInStructure = extern struct {
     s_type: StructureType = @import("std").mem.zeroes(StructureType),
-    p_next: [*c]const struct_BaseInStructure = @import("std").mem.zeroes([*c]const struct_BaseInStructure),
+    p_next: [*c]const BaseInStructure = @import("std").mem.zeroes([*c]const BaseInStructure),
 };

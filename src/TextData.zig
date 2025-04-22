@@ -1221,6 +1221,16 @@ fn removeIxes(
 
 fn replaceVkStrs(allo: std.mem.Allocator, data: []const u8) ![]u8 {
     var rdata = try allo.dupe(u8, data);
+    {
+        for ([_][]const u8{ "enum_Vk", "struct_Vk", "union_Vk" }) |prefix| {
+            if (indexOf(u8, rdata, prefix)) |_| {
+                const tmp = try replaceOwned(u8, allo, rdata, prefix, "");
+                allo.free(rdata);
+                rdata = tmp;
+            }
+        }
+    }
+
     const vk_strs = [_][]const u8{ "vk", "Vk", "VK" };
     const prefix_mods = [_][]const u8{ "_", "]", "(", " " };
     const suffix_mods = [_][]const u8{ "_", "[", ")", " " };
