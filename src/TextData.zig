@@ -39,6 +39,7 @@ wfile: std.fs.File,
 
 type_names: std.ArrayList(NameName),
 extension_names: std.ArrayList(NameName),
+dup_extension_names: std.ArrayList(NameName),
 spec_versions: std.ArrayList(NameValue),
 
 pub fn init(
@@ -65,6 +66,7 @@ pub fn init(
 
         .type_names = std.ArrayList(NameName).init(allo),
         .extension_names = std.ArrayList(NameName).init(allo),
+        .dup_extension_names = std.ArrayList(NameName).init(allo),
         .spec_versions = std.ArrayList(NameValue).init(allo),
     };
 }
@@ -88,6 +90,13 @@ pub fn deinit(self: *TextData) void {
         }
     }
     self.extension_names.deinit();
+
+    if (self.dup_extension_names.items.len > 0) {
+        for (self.dup_extension_names.items) |den| {
+            self.allo.free(den.old_name);
+            self.allo.free(den.new_name);
+        }
+    }
 
     if (self.spec_versions.items.len > 0) {
         for (self.spec_versions.items) |sv| self.allo.free(sv.name);
@@ -518,11 +527,22 @@ fn processExtensionName(self: *TextData, idx: usize) !void {
     const field_name = try cc.convert(self.allo, name, .snake);
     defer self.allo.free(field_name);
     const new_field_name = try prefixWithAt(self.allo, field_name);
-    const new_field_value = try self.allo.dupe(u8, getValue(line, &.{}, &.{}));
-    try self.extension_names.append(.{
-        .old_name = new_field_name,
-        .new_name = new_field_value,
-    });
+    const value = getValue(line, &.{}, &.{});
+    if (value[0] == '\"') {
+        const field_value = try cc.convert(self.allo, value, .snake);
+        defer self.allo.free(field_value);
+        const new_field_value = try prefixWithAt(self.allo, field_value);
+        try self.dup_extension_names.append(.{
+            .old_name = new_field_name,
+            .new_name = new_field_value,
+        });
+    } else {
+        const new_field_value = try self.allo.dupe(u8, value);
+        try self.extension_names.append(.{
+            .old_name = new_field_name,
+            .new_name = new_field_value,
+        });
+    }
 }
 
 fn writeExtensionNames(self: *const TextData) !void {
@@ -535,6 +555,18 @@ fn writeExtensionNames(self: *const TextData) !void {
         );
         defer self.allo.free(newline);
         try self.write(newline);
+    }
+    if (self.dup_extension_names.items.len > 0) {
+        try self.write("    const Self = @This();");
+        for (self.dup_extension_names.items) |den| {
+            const newline = try allocPrint(
+                self.allo,
+                "     pub const {s} = Self.{s};",
+                .{ den.new_name, den.old_name },
+            );
+            defer self.allo.free(newline);
+            try self.write(newline);
+        }
     }
     try self.write("};");
 }
@@ -579,9 +611,15 @@ fn processPFN(self: *const TextData, idx: usize) !void {
     const line = self.getPrevLine(idx);
     var rline: []u8, var tmp: []u8 = .{ undefined, undefined };
     rline = try replaceVkStrs(self.allo, line);
+
     tmp = try replacePFN(self.allo, rline);
     self.allo.free(rline);
     rline = tmp;
+
+    tmp = try replaceFlags(self.allo, rline);
+    self.allo.free(rline);
+    rline = tmp;
+
     defer self.allo.free(rline);
     try self.write(rline);
 }
@@ -811,7 +849,7 @@ fn processEnum(self: *const TextData, idx: usize) !usize {
         try self.write(field_line);
     }
     if (dup_fields.items.len > 0) {
-        try self.write("    pub const Self = @This();");
+        try self.write("    const Self = @This();");
         for (dup_fields.items) |field| {
             const field_line = try allocPrint(
                 self.allo,
@@ -943,7 +981,7 @@ fn processFlag1(self: *const TextData, idx: usize) !usize {
         try self.write(newline);
     }
     if (dup_fields.items.len > 0) {
-        try self.write("    pub const Self = @This();");
+        try self.write("    const Self = @This();");
         for (dup_fields.items) |field| {
             const newline = try allocPrint(
                 self.allo,
@@ -1083,7 +1121,7 @@ fn processFlag2(self: *const TextData, idx: usize) !usize {
         try self.write(newline);
     }
     if (dup_fields.items.len > 0) {
-        try self.write("    pub const Self = @This();");
+        try self.write("    const Self = @This();");
         for (dup_fields.items) |field| {
             const newline = try allocPrint(
                 self.allo,
