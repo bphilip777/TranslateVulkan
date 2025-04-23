@@ -12,6 +12,7 @@ const isDigit = std.ascii.isDigit;
 const replaceOwned = std.mem.replaceOwned;
 const allocPrint = std.fmt.allocPrint;
 const print = std.debug.print;
+const toLower = std.ascii.toLower;
 
 const builtin = @import("builtin");
 const newline_chars = if (builtin.os.tag == .windows) "\r\n" else "\n";
@@ -584,6 +585,8 @@ fn writeSpecVersions(self: *const TextData) !void {
 fn processPFN(self: *const TextData, idx: usize) !void {
     const line = self.getPrevLine(idx);
     const new_line = try replaceVkStrs(self.allo, line);
+    const under_idx = indexOfScalar(u8, new_line, ' ').? +% 1;
+    new_line[under_idx] = toLower(new_line[under_idx]);
     defer self.allo.free(new_line);
     try self.write(new_line);
 }
@@ -679,8 +682,16 @@ fn processExternStructVk(self: *const TextData, idx: usize) !usize {
             defer self.allo.free(field_name2);
 
             const field_value = line[colon_idx..line.len];
-            const field_value1 = try replaceVkStrs(self.allo, field_value);
+            var field_value1 = try replaceVkStrs(self.allo, field_value);
             defer self.allo.free(field_value1);
+            for (
+                [_][]const u8{ "FlagBits2KHR", "FlagBits2", "FlagBitsKHR", "FlagBits" },
+                [_][]const u8{ "Flags2", "Flags2", "Flags", "Flags" },
+            ) |old_suffix, new_suffix| {
+                const tmp = try std.mem.replaceOwned(u8, self.allo, field_value1, old_suffix, new_suffix);
+                self.allo.free(field_value1);
+                field_value1 = tmp;
+            }
 
             const new_line = try allocPrint(
                 self.allo,
@@ -710,24 +721,19 @@ fn processExternStruct(self: *const TextData, idx: usize) !usize {
         if (indexOfScalar(u8, line, ':')) |colon_idx| {
             const space_idx = lastIndexOfScalar(u8, line[0..colon_idx], ' ').? +% 1;
             const field_name = line[space_idx..colon_idx];
-
             const field_name1 = cc.convert(self.allo, field_name, .snake) catch {
                 try self.write(line);
                 continue;
             };
             defer self.allo.free(field_name1);
-
             const field_name2 = try prefixWithAt(self.allo, field_name1);
             defer self.allo.free(field_name2);
 
-            const new_line = try allocPrint(
-                self.allo,
-                "    {s}{s}",
-                .{ field_name2, line[colon_idx..line.len] },
-            );
+            const field_value = line[colon_idx..line.len];
+
+            const new_line = try allocPrint(self.allo, "    {s}{s}", .{ field_name2, field_value });
             defer self.allo.free(new_line);
             try self.write(new_line);
-
             continue;
         }
         try self.write(line);
@@ -739,6 +745,7 @@ fn processExternStruct(self: *const TextData, idx: usize) !usize {
 fn processEnum(self: *const TextData, idx: usize) !usize {
     var line = self.getPrevLine(idx);
     const title_name = getName(line, &.{"enum_Vk"}, &.{});
+    const is_result = eql(u8, title_name, "Result");
     const title_value = if (eql(u8, getValue(line, &.{}, &.{}), "c_uint")) "u32" else "i32";
 
     const new_line = try allocPrint(
@@ -783,7 +790,7 @@ fn processEnum(self: *const TextData, idx: usize) !usize {
 
         const matches = try getMatches(self.allo, name_words, title_words);
         defer self.allo.free(matches);
-        if (!anyMatches(matches)) break;
+        if (!anyMatches(matches) and !is_result) break;
 
         for (0..matches.len) |i| {
             const j = matches.len -% i -% 1;
@@ -949,6 +956,7 @@ fn processFlag1(self: *const TextData, idx: usize) !usize {
         defer self.allo.free(field_line);
         try self.write(field_line);
     }
+    try self.write("    _,");
     try self.write("};");
 
     line = self.getNextLine(start);
@@ -1072,6 +1080,7 @@ fn processFlag2(self: *const TextData, idx: usize) !usize {
         defer self.allo.free(newline);
         try self.write(newline);
     }
+    try self.write("    _,");
     try self.write("};");
 
     return start;
@@ -1216,39 +1225,20 @@ fn removeIxes(
 
 fn replaceVkStrs(allo: std.mem.Allocator, data: []const u8) ![]u8 {
     var rdata = try allo.dupe(u8, data);
-    {
-        for ([_][]const u8{ "enum_Vk", "struct_Vk", "union_Vk" }) |prefix| {
-            if (indexOf(u8, rdata, prefix)) |_| {
-                const tmp = try replaceOwned(u8, allo, rdata, prefix, "");
-                allo.free(rdata);
-                rdata = tmp;
-            }
+    for ([_][]const u8{ "enum_Vk", "struct_Vk", "union_Vk" }) |prefix| {
+        if (indexOf(u8, rdata, prefix)) |_| {
+            const tmp = try replaceOwned(u8, allo, rdata, prefix, "");
+            allo.free(rdata);
+            rdata = tmp;
         }
     }
 
-    const vk_strs = [_][]const u8{ "vk", "Vk", "VK" };
-    const prefix_mods = [_][]const u8{ "_", "]", "(", " " };
-    const suffix_mods = [_][]const u8{ "_", "[", ")", " " };
-
+    const vk_strs = [_][]const u8{ "_vk", " vk", "]Vk", ")Vk", " Vk", "VK_" };
     for (vk_strs) |vk_str| {
-        for (prefix_mods) |prefix| {
-            const new_mod_str = try allocPrint(allo, "{s}{s}", .{ prefix, vk_str });
-            defer allo.free(new_mod_str);
-            if (indexOf(u8, rdata, new_mod_str)) |_| {
-                const temp = try replaceOwned(u8, allo, rdata, new_mod_str, prefix);
-                allo.free(rdata);
-                rdata = temp;
-            }
-        }
-
-        for (suffix_mods) |suffix| {
-            const new_mod_str = try allocPrint(allo, "{s}{s}", .{ vk_str, suffix });
-            defer allo.free(new_mod_str);
-            if (indexOf(u8, rdata, new_mod_str)) |_| {
-                const temp = try replaceOwned(u8, allo, rdata, new_mod_str, suffix);
-                allo.free(rdata);
-                rdata = temp;
-            }
+        if (indexOf(u8, rdata, vk_str)) |_| {
+            const tmp = try replaceOwned(u8, allo, rdata, vk_str, vk_str[0]);
+            allo.free(rdata);
+            rdata = tmp;
         }
     }
 
@@ -1334,16 +1324,20 @@ fn getMatches(
     self: std.ArrayList([]const u8),
     other: std.ArrayList([]const u8),
 ) ![]bool {
-    var matches = try allo.alloc(bool, self.items.len);
-    outer: for (self.items, 0..) |s, i| {
-        for (other.items) |o| {
+    var self_matches = try allo.alloc(bool, self.items.len);
+    var other_matches = try allo.alloc(bool, other.items.len);
+    defer allo.free(other_matches);
+    for (self.items, 0..) |s, i| {
+        if (self_matches[i]) continue;
+        for (other.items, 0..) |o, j| {
+            if (other_matches[j]) continue;
             if (eql(u8, s, o)) {
-                matches[i] = true;
-                continue :outer;
+                self_matches[i] = true;
+                other_matches[j] = true;
             }
         }
     }
-    return matches;
+    return self_matches;
 }
 
 fn anyMatches(matches: []const bool) bool {
@@ -1414,19 +1408,24 @@ fn prefixWithAt(allo: Allocator, data: []const u8) ![]const u8 {
 fn sort(fields: *std.ArrayList(NameValue)) !void {
     for (0..fields.items.len -% 1) |i| {
         for (i +% 1..fields.items.len) |j| {
-            if (fields.items[i].value.len > fields.items[j].value.len) {
-                const tmp = fields.items[i];
-                fields.items[i] = fields.items[j];
-                fields.items[j] = tmp;
-            } else {
-                const v1 = try std.fmt.parseInt(i128, fields.items[i].value, 10);
-                const v2 = try std.fmt.parseInt(i128, fields.items[j].value, 10);
-                if (v1 > v2) {
-                    const tmp = fields.items[i];
-                    fields.items[i] = fields.items[j];
-                    fields.items[j] = tmp;
-                }
-            }
+            const value1 = fields.items[i].value;
+            const value2 = fields.items[j].value;
+            const is_n1 = value1[0] == '-';
+            const is_n2 = value2[0] == '-';
+            if (is_n1 and !is_n2) continue;
+            const is_shorter = value1.len < value2.len;
+            if (is_n1 and is_n2 and !is_shorter) continue;
+            if (!is_n1 and !is_n2 and is_shorter) continue;
+            swap(fields, i, j);
         }
     }
+}
+
+fn swap(fields: *std.ArrayList(NameValue), i: usize, j: usize) void {
+    if (fields.items.len == 0) unreachable;
+    if (i == j) unreachable;
+    if (i > fields.items.len or j > fields.items.len) unreachable;
+    const tmp = fields.items[i];
+    fields.items[i] = fields.items[j];
+    fields.items[j] = tmp;
 }
