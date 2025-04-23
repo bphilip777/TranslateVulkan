@@ -622,9 +622,12 @@ fn processExternUnionVk(self: *const TextData, idx: usize) !usize {
     while (true) {
         line = self.getNextLine(start);
         start = self.getNextStart(start);
-        try self.write(line);
         if (eql(u8, line, "};")) break;
+        const rline = try replaceVkStrs(self.allo, line);
+        defer self.allo.free(rline);
+        try self.write(rline);
     }
+    try self.write(line);
 
     line = self.getNextLine(start);
     const new_name = getName(line, &.{"Vk"}, &.{});
