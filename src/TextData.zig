@@ -665,52 +665,20 @@ fn processExternStructVk(self: *const TextData, idx: usize) !usize {
     while (true) {
         line = self.getNextLine(start);
         start = self.getNextStart(start);
+        if (eql(u8, line, "};")) break;
 
-        const rline = try replaceVkStrs(self.allo, line);
+        const rline = try convertFieldName2Snake(self.allo, line);
         defer self.allo.free(rline);
 
-        if (indexOfScalar(u8, line, ':')) |colon_idx| {
-            const space_idx = lastIndexOfScalar(u8, line[0..colon_idx], ' ').? +% 1;
-            const field_name = line[space_idx..colon_idx];
+        const rline1 = try replaceVkStrs(self.allo, rline);
+        defer self.allo.free(rline1);
 
-            const field_name1 = cc.convert(self.allo, field_name, .snake) catch {
-                try self.write(line);
-                continue;
-            };
-            defer self.allo.free(field_name1);
-
-            const field_name2 = try prefixWithAt(self.allo, field_name1);
-            defer self.allo.free(field_name2);
-
-            const field_value = line[colon_idx..line.len];
-            var field_value1 = try replaceVkStrs(self.allo, field_value);
-            defer self.allo.free(field_value1);
-            for (
-                [_][]const u8{ "FlagBits2KHR", "FlagBits2", "FlagBitsKHR", "FlagBits" },
-                [_][]const u8{ "Flags2", "Flags2", "Flags", "Flags" },
-            ) |old_suffix, new_suffix| {
-                if (indexOf(u8, field_value1, old_suffix) != null) {
-                    const tmp = try std.mem.replaceOwned(u8, self.allo, field_value1, old_suffix, new_suffix);
-                    self.allo.free(field_value1);
-                    field_value1 = tmp;
-                }
-            }
-
-            const new_line = try allocPrint(
-                self.allo,
-                "    {s}{s}",
-                .{ field_name2, field_value1 },
-            );
-            defer self.allo.free(new_line);
-            try self.write(new_line);
-            continue;
-        }
-        try self.write(rline);
-        if (eql(u8, line, "};")) break;
+        const rline2 = try replaceFlags(self.allo, rline1);
+        defer self.allo.free(rline2);
+        try self.write(rline2);
     }
 
-    line = self.getNextLine(start);
-    start = self.getNextStart(start);
+    try self.write(line);
     return start;
 }
 
@@ -721,27 +689,13 @@ fn processExternStruct(self: *const TextData, idx: usize) !usize {
     while (true) {
         line = self.getNextLine(start);
         start = self.getNextStart(start);
-        if (indexOfScalar(u8, line, ':')) |colon_idx| {
-            const space_idx = lastIndexOfScalar(u8, line[0..colon_idx], ' ').? +% 1;
-            const field_name = line[space_idx..colon_idx];
-            const field_name1 = cc.convert(self.allo, field_name, .snake) catch {
-                try self.write(line);
-                continue;
-            };
-            defer self.allo.free(field_name1);
-            const field_name2 = try prefixWithAt(self.allo, field_name1);
-            defer self.allo.free(field_name2);
-
-            const field_value = line[colon_idx..line.len];
-
-            const new_line = try allocPrint(self.allo, "    {s}{s}", .{ field_name2, field_value });
-            defer self.allo.free(new_line);
-            try self.write(new_line);
-            continue;
-        }
-        try self.write(line);
         if (eql(u8, line, "};")) break;
+
+        const rline = try convertFieldName2Snake(self.allo, line);
+        defer self.allo.free(rline);
+        try self.write(rline);
     }
+    try self.write(line);
     return start;
 }
 
@@ -1262,6 +1216,34 @@ fn replaceVkStrs(allo: std.mem.Allocator, data: []const u8) ![]u8 {
     }
 
     return rdata;
+}
+
+fn replaceFlags(allo: std.mem.Allocator, data: []const u8) ![]u8 {
+    var rdata = try allo.dupe(u8, data);
+    for (
+        [_][]const u8{ "FlagBits2KHR", "FlagBits2", "FlagBitsKHR", "FlagBits" },
+        [_][]const u8{ "Flags2", "Flags2", "Flags", "Flags" },
+    ) |old_suffix, new_suffix| {
+        if (indexOf(u8, rdata, old_suffix) != null) {
+            const tmp = try std.mem.replaceOwned(u8, allo, rdata, old_suffix, new_suffix);
+            allo.free(rdata);
+            rdata = tmp;
+        }
+    }
+    return rdata;
+}
+
+fn convertFieldName2Snake(allo: std.mem.Allocator, data: []const u8) ![]u8 {
+    const colon_idx = indexOfScalar(u8, data, ':').?;
+    const space_idx = lastIndexOfScalar(u8, data[0..colon_idx], ' ').? +% 1;
+    const name = data[space_idx..colon_idx];
+    const new_name = try cc.convert(allo, name, .snake);
+
+    var new_data = try allo.alloc(u8, data.len +% new_name.len -% name.len);
+    @memset(new_data[0..space_idx], ' ');
+    @memcpy(new_data[space_idx .. space_idx +% new_name.len], new_name);
+    @memcpy(new_data[space_idx +% new_name.len .. new_data.len], data[colon_idx..data.len]);
+    return new_data;
 }
 
 fn convertArgs2Snake(allo: std.mem.Allocator, data: []const u8) ![]u8 {

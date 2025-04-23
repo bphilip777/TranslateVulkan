@@ -3,6 +3,6 @@ pub const Offset2D = extern struct {
     y: i32 = @import("std").mem.zeroes(i32),
 };
 pub const BaseInStructure = extern struct {
-    s_type: StructureType = @import("std").mem.zeroes(StructureType),
+    s_type: StructureType = @import("std").mem.zeroes(VkStructureType),
     p_next: [*c]const BaseInStructure = @import("std").mem.zeroes([*c]const BaseInStructure),
 };
