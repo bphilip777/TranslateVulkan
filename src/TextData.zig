@@ -8,6 +8,7 @@ const indexOf = std.mem.indexOf;
 const indexOfScalar = std.mem.indexOfScalar;
 const lastIndexOfScalar = std.mem.lastIndexOfScalar;
 const trimRight = std.mem.trimRight;
+const trimLeft = std.mem.trimLeft;
 const isDigit = std.ascii.isDigit;
 const replaceOwned = std.mem.replaceOwned;
 const allocPrint = std.fmt.allocPrint;
@@ -688,9 +689,11 @@ fn processExternStructVk(self: *const TextData, idx: usize) !usize {
                 [_][]const u8{ "FlagBits2KHR", "FlagBits2", "FlagBitsKHR", "FlagBits" },
                 [_][]const u8{ "Flags2", "Flags2", "Flags", "Flags" },
             ) |old_suffix, new_suffix| {
-                const tmp = try std.mem.replaceOwned(u8, self.allo, field_value1, old_suffix, new_suffix);
-                self.allo.free(field_value1);
-                field_value1 = tmp;
+                if (indexOf(u8, field_value1, old_suffix) != null) {
+                    const tmp = try std.mem.replaceOwned(u8, self.allo, field_value1, old_suffix, new_suffix);
+                    self.allo.free(field_value1);
+                    field_value1 = tmp;
+                }
             }
 
             const new_line = try allocPrint(
@@ -748,13 +751,13 @@ fn processEnum(self: *const TextData, idx: usize) !usize {
     const is_result = eql(u8, title_name, "Result");
     const title_value = if (eql(u8, getValue(line, &.{}, &.{}), "c_uint")) "u32" else "i32";
 
-    const new_line = try allocPrint(
+    const newline = try allocPrint(
         self.allo,
         "pub const {s} = enum({s}) {{",
         .{ title_name, title_value },
     );
-    defer self.allo.free(new_line);
-    try self.write(new_line);
+    defer self.allo.free(newline);
+    try self.write(newline);
 
     const title_words = try cc.split2Words(self.allo, title_name);
     defer title_words.deinit();
@@ -764,6 +767,15 @@ fn processEnum(self: *const TextData, idx: usize) !usize {
     defer fields.deinit();
     defer {
         for (fields.items) |field| {
+            self.allo.free(field.name);
+            self.allo.free(field.value);
+        }
+    }
+
+    var dup_fields = std.ArrayList(NameValue).init(self.allo);
+    defer dup_fields.deinit();
+    defer {
+        for (dup_fields.items) |field| {
             self.allo.free(field.name);
             self.allo.free(field.value);
         }
@@ -788,7 +800,7 @@ fn processEnum(self: *const TextData, idx: usize) !usize {
         defer name_words.deinit();
         defer for (name_words.items) |name_word| self.allo.free(name_word);
 
-        const matches = try getMatches(self.allo, name_words, title_words);
+        const matches = try getMatches(self.allo, &name_words, &title_words);
         defer self.allo.free(matches);
         if (!anyMatches(matches) and !is_result) break;
 
@@ -812,13 +824,18 @@ fn processEnum(self: *const TextData, idx: usize) !usize {
         }
 
         if (unique_values.get(new_field_value)) |fil| {
-            const old_field_name = fields.items[fil].name;
-            if (old_field_name.len > new_field_name.len) {
-                _ = unique_names.remove(old_field_name);
-                self.allo.free(fields.items[fil].name);
+            const old_field = fields.items[fil];
+            if (old_field.name.len > new_field_name.len) {
+                try dup_fields.append(.{
+                    .name = old_field.name,
+                    .value = try self.allo.dupe(u8, new_field_name),
+                });
                 fields.items[fil].name = new_field_name;
             } else {
-                self.allo.free(new_field_name);
+                try dup_fields.append(.{
+                    .name = new_field_name,
+                    .value = try self.allo.dupe(u8, old_field.name),
+                });
             }
             self.allo.free(new_field_value);
             continue;
@@ -844,6 +861,16 @@ fn processEnum(self: *const TextData, idx: usize) !usize {
         try self.write(field_line);
     }
     try self.write("};");
+
+    for (dup_fields.items) |field| {
+        const field_line = try allocPrint(
+            self.allo,
+            "pub const {s} = {s}.{s};",
+            .{ field.name, title_name, field.value },
+        );
+        defer self.allo.free(field_line);
+        try self.write(field_line);
+    }
 
     line = self.getNextLine(idx);
     const start = self.getNextStart(idx);
@@ -901,7 +928,7 @@ fn processFlag1(self: *const TextData, idx: usize) !usize {
         defer name_words.deinit();
         defer for (name_words.items) |name_word| self.allo.free(name_word);
 
-        const matches = try getMatches(self.allo, name_words, title_words);
+        const matches = try getMatches(self.allo, &name_words, &title_words);
         defer self.allo.free(matches);
         if (!anyMatches(matches)) break;
 
@@ -927,8 +954,7 @@ fn processFlag1(self: *const TextData, idx: usize) !usize {
         if (unique_values.get(new_field_value)) |fil| {
             const old_field_name = fields.items[fil].name;
             if (old_field_name.len > new_field_name.len) {
-                _ = unique_names.remove(old_field_name);
-                self.allo.free(fields.items[fil].name);
+                self.allo.free(old_field_name);
                 fields.items[fil].name = new_field_name;
             } else {
                 self.allo.free(new_field_name);
@@ -948,19 +974,17 @@ fn processFlag1(self: *const TextData, idx: usize) !usize {
     try sort(&fields);
 
     for (fields.items) |field| {
-        const field_line = try allocPrint(
+        const newline = try allocPrint(
             self.allo,
             "    {s} = {s},",
             .{ field.name, field.value },
         );
-        defer self.allo.free(field_line);
-        try self.write(field_line);
+        defer self.allo.free(newline);
+        try self.write(newline);
     }
-    try self.write("    _,");
     try self.write("};");
 
     line = self.getNextLine(start);
-    // print("Line: {s}\n", .{line});
     start = self.getNextStart(start);
     return start;
 }
@@ -980,20 +1004,18 @@ fn processFlag2(self: *const TextData, idx: usize) !usize {
 
     var title_words = try cc.split2Words(self.allo, title_name);
     defer title_words.deinit();
-    for (title_words.items, 0..) |*title_word, i| {
-        const word = title_word.*;
-        if (word.len > 1 and isDigit(word[word.len -% 1])) {
+    for (0..title_words.items.len) |i| {
+        const word = title_words.items[i];
+        if (isDigit(word[word.len -% 1])) {
             const new_digit = try self.allo.dupe(u8, word[word.len -% 1 .. word.len]);
             try title_words.insert(i +% 1, new_digit);
 
-            const new_word = try self.allo.alloc(u8, word.len -% 1);
-            @memcpy(new_word, word[0 .. word.len -% 1]);
-            self.allo.free(title_word.*);
-            title_word.* = new_word;
+            const new_word = try self.allo.dupe(u8, word[0 .. word.len -% 1]);
+            self.allo.free(word);
+            title_words.items[i] = new_word;
         }
     }
     defer for (title_words.items) |title_word| self.allo.free(title_word);
-    // for (title_words.items) |title_word| print("Title Word: {s}\n", .{title_word});
 
     var start = idx;
     while (true) {
@@ -1024,7 +1046,7 @@ fn processFlag2(self: *const TextData, idx: usize) !usize {
         defer name_words.deinit();
         defer for (name_words.items) |name_word| self.allo.free(name_word);
 
-        const matches = try getMatches(self.allo, name_words, title_words);
+        const matches = try getMatches(self.allo, &name_words, &title_words);
         defer self.allo.free(matches);
         if (!anyMatches(matches)) break;
 
@@ -1050,7 +1072,6 @@ fn processFlag2(self: *const TextData, idx: usize) !usize {
         if (unique_values.get(new_field_value)) |fil| {
             const old_field_name = fields.items[fil].name;
             if (old_field_name.len > new_field_name.len) {
-                _ = unique_names.remove(old_field_name);
                 self.allo.free(fields.items[fil].name);
                 fields.items[fil].name = new_field_name;
             } else {
@@ -1080,7 +1101,6 @@ fn processFlag2(self: *const TextData, idx: usize) !usize {
         defer self.allo.free(newline);
         try self.write(newline);
     }
-    try self.write("    _,");
     try self.write("};");
 
     return start;
@@ -1094,7 +1114,6 @@ fn processTypeVk(self: *const TextData, idx: usize) !void {
         return;
     }
     const value = getValue(line, &.{"Vk"}, &.{});
-    // print("Name: {s}, Value: {s}\n", .{ name, value });
     const newline = try std.fmt.allocPrint(self.allo, "pub const {s} = {s};", .{ name, value });
     defer self.allo.free(newline);
     try self.write(newline);
@@ -1204,7 +1223,7 @@ fn removeIxes(
         outer: for (prefixes) |prefix| {
             if (startsWith(u8, new_word, prefix)) {
                 const temp = new_word[prefix.len..];
-                new_word = std.mem.trimLeft(u8, temp, " ");
+                new_word = trimLeft(u8, temp, " ");
                 break :outer;
             }
         }
@@ -1226,7 +1245,7 @@ fn removeIxes(
 fn replaceVkStrs(allo: std.mem.Allocator, data: []const u8) ![]u8 {
     var rdata = try allo.dupe(u8, data);
     for ([_][]const u8{ "enum_Vk", "struct_Vk", "union_Vk" }) |prefix| {
-        if (indexOf(u8, rdata, prefix)) |_| {
+        if (indexOf(u8, rdata, prefix) != null) {
             const tmp = try replaceOwned(u8, allo, rdata, prefix, "");
             allo.free(rdata);
             rdata = tmp;
@@ -1235,8 +1254,8 @@ fn replaceVkStrs(allo: std.mem.Allocator, data: []const u8) ![]u8 {
 
     const vk_strs = [_][]const u8{ "_vk", " vk", "]Vk", ")Vk", " Vk", "VK_" };
     for (vk_strs) |vk_str| {
-        if (indexOf(u8, rdata, vk_str)) |_| {
-            const tmp = try replaceOwned(u8, allo, rdata, vk_str, vk_str[0]);
+        if (indexOf(u8, rdata, vk_str) != null) {
+            const tmp = try replaceOwned(u8, allo, rdata, vk_str, vk_str[0..1]);
             allo.free(rdata);
             rdata = tmp;
         }
@@ -1247,7 +1266,7 @@ fn replaceVkStrs(allo: std.mem.Allocator, data: []const u8) ![]u8 {
 
 fn convertArgs2Snake(allo: std.mem.Allocator, data: []const u8) ![]u8 {
     // assumes new name >= old name
-    // assumes data is fn(a: b, c: d) result format
+    // assumes data is fn(a: b, c: d) relt format
     var rdata = try allo.dupe(u8, data);
     var pos: usize = 0;
 
@@ -1306,7 +1325,7 @@ fn getNextLine(self: *const TextData, start: usize) []const u8 {
 }
 
 fn getNextStart(self: *const TextData, start: usize) usize {
-    // TODO - determine whether to use this or have safety for end of line
+    // TODO - determine whether to use this or have saty for end of line
     return start +% self.getEndOfCurrLine(start) +% 1;
 }
 
@@ -1321,8 +1340,8 @@ fn getPrevStart(self: *const TextData, end: usize) usize {
 
 fn getMatches(
     allo: std.mem.Allocator,
-    self: std.ArrayList([]const u8),
-    other: std.ArrayList([]const u8),
+    self: *const std.ArrayList([]const u8),
+    other: *const std.ArrayList([]const u8),
 ) ![]bool {
     var self_matches = try allo.alloc(bool, self.items.len);
     var other_matches = try allo.alloc(bool, other.items.len);
@@ -1392,7 +1411,7 @@ fn isKeyword(word: []const u8) bool {
         .{ "try", {} },
         .{ "union", {} },
         .{ "unreachable", {} },
-        .{ "usingnamespace", {} },
+        .{ "usingnamespe", {} },
         .{ "var", {} },
         .{ "volatile", {} },
         .{ "while", {} },
