@@ -667,7 +667,10 @@ fn processExternStructVk(self: *const TextData, idx: usize) !usize {
         start = self.getNextStart(start);
         if (eql(u8, line, "};")) break;
 
-        const rline = try convertFieldName2Snake(self.allo, line);
+        const rline = convertFieldName2Snake(self.allo, line) catch |err| {
+            print("Line: {s}\n", .{line});
+            return err;
+        };
         defer self.allo.free(rline);
 
         const rline1 = try replaceVkStrs(self.allo, rline);
@@ -677,7 +680,6 @@ fn processExternStructVk(self: *const TextData, idx: usize) !usize {
         defer self.allo.free(rline2);
         try self.write(rline2);
     }
-
     try self.write(line);
     return start;
 }
@@ -689,11 +691,8 @@ fn processExternStruct(self: *const TextData, idx: usize) !usize {
     while (true) {
         line = self.getNextLine(start);
         start = self.getNextStart(start);
+        try self.write(line);
         if (eql(u8, line, "};")) break;
-
-        const rline = try convertFieldName2Snake(self.allo, line);
-        defer self.allo.free(rline);
-        try self.write(rline);
     }
     try self.write(line);
     return start;
