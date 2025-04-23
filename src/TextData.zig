@@ -445,15 +445,28 @@ fn processExtern(self: *const TextData, idx: usize) !usize {
 fn processExternFnVk(self: *const TextData, idx: usize) !void {
     const line = self.getPrevLine(idx);
     const fn_name = getFnName(line, &.{"vk"}, &.{});
-    const camel_fn_name = try cc.convert(self.allo, fn_name, .camel);
-    defer self.allo.free(camel_fn_name);
-    const replace_fn_name = try replaceOwned(u8, self.allo, line, fn_name, camel_fn_name);
-    defer self.allo.free(replace_fn_name);
-    const new_fn_line = try replaceVkStrs(self.allo, replace_fn_name);
-    defer self.allo.free(new_fn_line);
-    const new_line = try convertArgs2Snake(self.allo, new_fn_line);
-    defer self.allo.free(new_line);
-    try self.write(new_line);
+    var rline: []u8, var tmp: []u8 = .{ undefined, undefined };
+
+    const camel_name = try cc.convert(self.allo, fn_name, .camel);
+    defer self.allo.free(camel_name);
+
+    tmp = try replaceOwned(u8, self.allo, line, fn_name, camel_name);
+    rline = tmp;
+
+    tmp = try replaceVkStrs(self.allo, rline);
+    self.allo.free(rline);
+    rline = tmp;
+
+    tmp = try convertArgs2Snake(self.allo, rline);
+    self.allo.free(rline);
+    rline = tmp;
+
+    tmp = try replacePFN(self.allo, rline);
+    self.allo.free(rline);
+    rline = tmp;
+
+    defer self.allo.free(rline);
+    try self.write(rline);
 }
 
 fn processExternFn(self: *const TextData, idx: usize) !void {
@@ -523,15 +536,19 @@ fn writeTypeNames(self: *const TextData) !void {
 
 fn processExtensionName(self: *TextData, idx: usize) !void {
     const line = self.getPrevLine(idx);
+
     const name = getName(line, &.{ "VK_KHR_", "VK_" }, &.{"_EXTENSION_NAME"});
     const field_name = try cc.convert(self.allo, name, .snake);
     defer self.allo.free(field_name);
     const new_field_name = try prefixWithAt(self.allo, field_name);
-    const value = getValue(line, &.{}, &.{});
-    if (value[0] == '\"') {
+
+    const value = getValue(line, &.{ "VK_KHR_", "VK_" }, &.{"_EXTENSION_NAME"});
+    if (value[0] != '\"') {
+        print("Value: {s}\n", .{value});
         const field_value = try cc.convert(self.allo, value, .snake);
         defer self.allo.free(field_value);
         const new_field_value = try prefixWithAt(self.allo, field_value);
+
         try self.dup_extension_names.append(.{
             .old_name = new_field_name,
             .new_name = new_field_value,
@@ -610,7 +627,9 @@ fn writeSpecVersions(self: *TextData) !void {
 fn processPFN(self: *const TextData, idx: usize) !void {
     const line = self.getPrevLine(idx);
     var rline: []u8, var tmp: []u8 = .{ undefined, undefined };
+
     rline = try replaceVkStrs(self.allo, line);
+    defer self.allo.free(rline);
 
     tmp = try replacePFN(self.allo, rline);
     self.allo.free(rline);
@@ -620,7 +639,6 @@ fn processPFN(self: *const TextData, idx: usize) !void {
     self.allo.free(rline);
     rline = tmp;
 
-    defer self.allo.free(rline);
     try self.write(rline);
 }
 
@@ -1134,6 +1152,7 @@ fn processFlag2(self: *const TextData, idx: usize) !usize {
     }
     try self.write("};");
 
+    start = self.getPrevStart(start);
     return start;
 }
 
@@ -1487,7 +1506,8 @@ fn isKeyword(word: []const u8) bool {
 }
 
 fn prefixWithAt(allo: Allocator, data: []const u8) ![]const u8 {
-    return if (isKeyword(data) or isDigit(data[0])) try allocPrint(allo, "@\"{s}\"", .{data}) else try allo.dupe(u8, data);
+    if (isKeyword(data) or isDigit(data[0])) return try allocPrint(allo, "@\"{s}\"", .{data});
+    return try allo.dupe(u8, data);
 }
 
 fn sort(fields: *std.ArrayList(NameValue)) !void {
