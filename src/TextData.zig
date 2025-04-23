@@ -18,7 +18,7 @@ const print = std.debug.print;
 const toLower = std.ascii.toLower;
 const isDigit = std.ascii.isDigit;
 
-const trimLine = @import("helepers.zig").trimLine;
+const trimLine = @import("helpers.zig").trimLine;
 const newline_chars = @import("helpers.zig").newline_chars;
 
 const builtin = @import("builtin");

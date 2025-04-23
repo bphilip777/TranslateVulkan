@@ -3,7 +3,7 @@ const print = std.debug.print;
 const trimRight = std.mem.trimRight;
 const eql = std.mem.eql;
 const TextData = @import("TextData.zig");
-const trimLine = @import("helepers.zig").trimLine;
+const trimLine = @import("helpers.zig").trimLine;
 
 // pub fn main() !void {
 //     var da = std.heap.DebugAllocator(.{}){};
