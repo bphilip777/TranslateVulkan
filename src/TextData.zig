@@ -25,6 +25,8 @@ const builtin = @import("builtin");
 
 const BitTricks = @import("BitTricks");
 const cc = @import("CodingCase");
+
+const NameName = @import("NameName.zig");
 const NameValue = @import("NameValue.zig");
 
 const TextData = @This();
@@ -33,8 +35,8 @@ allo: std.mem.Allocator,
 data: []const u8,
 wfile: std.fs.File,
 
-type_names: std.ArrayList(NameValue),
-extension_names: std.ArrayList(NameValue),
+type_names: std.ArrayList(NameName),
+extension_names: std.ArrayList(NameName),
 spec_versions: std.ArrayList(NameValue),
 
 pub fn init(
@@ -59,8 +61,8 @@ pub fn init(
         .wfile = wfile,
         .data = data,
 
-        .type_names = std.ArrayList(NameValue).init(allo),
-        .extension_names = std.ArrayList(NameValue).init(allo),
+        .type_names = std.ArrayList(NameName).init(allo),
+        .extension_names = std.ArrayList(NameName).init(allo),
         .spec_versions = std.ArrayList(NameValue).init(allo),
     };
 }
@@ -71,25 +73,22 @@ pub fn deinit(self: *TextData) void {
 
     if (self.type_names.items.len > 0) {
         for (self.type_names.items) |tn| {
-            self.allo.free(tn.name);
-            self.allo.free(tn.value);
+            self.allo.free(tn.old_name);
+            self.allo.free(tn.new_name);
         }
     }
     self.type_names.deinit();
 
     if (self.extension_names.items.len > 0) {
         for (self.extension_names.items) |en| {
-            self.allo.free(en.name);
-            self.allo.free(en.value);
+            self.allo.free(en.old_name);
+            self.allo.free(en.new_name);
         }
     }
     self.extension_names.deinit();
 
     if (self.spec_versions.items.len > 0) {
-        for (self.spec_versions.items) |sv| {
-            self.allo.free(sv.name);
-            self.allo.free(sv.value);
-        }
+        for (self.spec_versions.items) |sv| self.allo.free(sv.name);
     }
     self.spec_versions.deinit();
 }
@@ -495,15 +494,19 @@ fn processTypeName(self: *TextData, idx: usize) !void {
     const new_field_name = try allocPrint(self.allo, "{s}: {s}", .{ word, type_name });
     const new_field_value = try self.allo.dupe(u8, getValue(line, &.{}, &.{}));
     try self.type_names.append(.{
-        .name = new_field_name,
-        .value = new_field_value,
+        .old_name = new_field_name,
+        .new_name = new_field_value,
     });
 }
 
 fn writeTypeNames(self: *const TextData) !void {
     try self.write("pub const TypeNames = struct {");
     for (self.type_names.items) |tn| {
-        const newline = try allocPrint(self.allo, "    {s} = {s},", .{ tn.name, tn.value });
+        const newline = try allocPrint(
+            self.allo,
+            "    {s} = {s},",
+            .{ tn.old_name, tn.new_name },
+        );
         defer self.allo.free(newline);
         try self.write(newline);
     }
@@ -518,15 +521,19 @@ fn processExtensionName(self: *TextData, idx: usize) !void {
     const new_field_name = try prefixWithAt(self.allo, field_name);
     const new_field_value = try self.allo.dupe(u8, getValue(line, &.{}, &.{}));
     try self.extension_names.append(.{
-        .name = new_field_name,
-        .value = new_field_value,
+        .old_name = new_field_name,
+        .new_name = new_field_value,
     });
 }
 
 fn writeExtensionNames(self: *const TextData) !void {
     try self.write("pub const ExtensionNames = struct {");
     for (self.extension_names.items) |en| {
-        const newline = try allocPrint(self.allo, "    {s}: {s},", .{ en.name, en.value });
+        const newline = try allocPrint(
+            self.allo,
+            "    {s}: {s},",
+            .{ en.old_name, en.new_name },
+        );
         defer self.allo.free(newline);
         try self.write(newline);
     }
@@ -547,39 +554,20 @@ fn processSpecVersion(self: *TextData, idx: usize) !void {
         "{s}: {s}",
         .{ snake_name1, type_name },
     );
-    const new_field_value = try self.allo.dupe(u8, getValue(line, &.{}, &.{}));
+    const new_field_value = try std.fmt.parseInt(i128, getValue(line, &.{}, &.{}), 10);
     try self.spec_versions.append(.{
         .name = new_field_name,
         .value = new_field_value,
     });
 }
 
-fn writeSpecVersions(self: *const TextData) !void {
-    for (0..self.spec_versions.items.len -% 1) |i| {
-        for (i +% 1..self.spec_versions.items.len) |j| {
-            const old_sv = self.spec_versions.items[i];
-            const new_sv = self.spec_versions.items[j];
-            if (old_sv.value.len > new_sv.value.len) {
-                const tmp = self.spec_versions.items[i];
-                self.spec_versions.items[i] = self.spec_versions.items[j];
-                self.spec_versions.items[j] = tmp;
-            } else {
-                const ov = try std.fmt.parseInt(i128, old_sv.value, 10);
-                const nv = try std.fmt.parseInt(i128, new_sv.value, 10);
-                if (ov > nv) {
-                    const tmp = self.spec_versions.items[i];
-                    self.spec_versions.items[i] = self.spec_versions.items[j];
-                    self.spec_versions.items[j] = tmp;
-                }
-            }
-        }
-    }
-
+fn writeSpecVersions(self: *TextData) !void {
+    try sort(&self.spec_versions);
     try self.write("pub const SpecVersions = struct {");
     for (self.spec_versions.items) |sv| {
         const newline = try allocPrint(
             self.allo,
-            "    {s} = {s},",
+            "    {s} = {},",
             .{ sv.name, sv.value },
         );
         defer self.allo.free(newline);
@@ -724,26 +712,21 @@ fn processEnum(self: *const TextData, idx: usize) !usize {
 
     var fields = std.ArrayList(NameValue).init(self.allo);
     defer fields.deinit();
-    defer {
-        for (fields.items) |field| {
-            self.allo.free(field.name);
-            self.allo.free(field.value);
-        }
-    }
+    defer for (fields.items) |field| self.allo.free(field.name);
 
-    var dup_fields = std.ArrayList(NameValue).init(self.allo);
+    var dup_fields = std.ArrayList(NameName).init(self.allo);
     defer dup_fields.deinit();
     defer {
         for (dup_fields.items) |field| {
-            self.allo.free(field.name);
-            self.allo.free(field.value);
+            self.allo.free(field.old_name);
+            self.allo.free(field.new_name);
         }
     }
 
     var unique_names = std.StringHashMap(void).init(self.allo);
     defer unique_names.deinit();
 
-    var unique_values = std.StringHashMap(usize).init(self.allo);
+    var unique_values = std.AutoHashMap(i128, usize).init(self.allo);
     defer unique_values.deinit();
 
     var curr = self.getPrevStart(idx);
@@ -774,11 +757,10 @@ fn processEnum(self: *const TextData, idx: usize) !usize {
         defer self.allo.free(temp_field_name);
 
         const new_field_name = try prefixWithAt(self.allo, temp_field_name);
-        const new_field_value = try self.allo.dupe(u8, getValue(line, &.{}, &.{}));
+        const new_field_value = try std.fmt.parseInt(i128, getValue(line, &.{}, &.{}), 10);
 
         if (unique_names.get(new_field_name)) |_| {
             self.allo.free(new_field_name);
-            self.allo.free(new_field_value);
             continue;
         }
 
@@ -786,17 +768,16 @@ fn processEnum(self: *const TextData, idx: usize) !usize {
             const old_field = fields.items[fil];
             if (old_field.name.len > new_field_name.len) {
                 try dup_fields.append(.{
-                    .name = old_field.name,
-                    .value = try self.allo.dupe(u8, new_field_name),
+                    .old_name = old_field.name,
+                    .new_name = try self.allo.dupe(u8, new_field_name),
                 });
                 fields.items[fil].name = new_field_name;
             } else {
                 try dup_fields.append(.{
-                    .name = new_field_name,
-                    .value = try self.allo.dupe(u8, old_field.name),
+                    .old_name = new_field_name,
+                    .new_name = try self.allo.dupe(u8, old_field.name),
                 });
             }
-            self.allo.free(new_field_value);
             continue;
         }
 
@@ -813,7 +794,7 @@ fn processEnum(self: *const TextData, idx: usize) !usize {
     for (fields.items) |field| {
         const field_line = try allocPrint(
             self.allo,
-            "    {s} = {s},",
+            "    {s} = {},",
             .{ field.name, field.value },
         );
         defer self.allo.free(field_line);
@@ -825,7 +806,7 @@ fn processEnum(self: *const TextData, idx: usize) !usize {
         const field_line = try allocPrint(
             self.allo,
             "pub const {s} = {s}.{s};",
-            .{ field.name, title_name, field.value },
+            .{ field.new_name, title_name, field.old_name },
         );
         defer self.allo.free(field_line);
         try self.write(field_line);
@@ -860,17 +841,21 @@ fn processFlag1(self: *const TextData, idx: usize) !usize {
 
     var fields = std.ArrayList(NameValue).init(self.allo);
     defer fields.deinit();
+    defer for (fields.items) |field| self.allo.free(field.name);
+
+    var dup_fields = std.ArrayList(NameName).init(self.allo);
+    defer dup_fields.deinit();
     defer {
-        for (fields.items) |field| {
-            self.allo.free(field.name);
-            self.allo.free(field.value);
+        for (dup_fields.items) |field| {
+            self.allo.free(field.old_name);
+            self.allo.free(field.new_name);
         }
     }
 
     var unique_names = std.StringHashMap(void).init(self.allo);
     defer unique_names.deinit();
 
-    var unique_values = std.StringHashMap(usize).init(self.allo);
+    var unique_values = std.AutoHashMap(i128, usize).init(self.allo);
     defer unique_values.deinit();
 
     line = prev_line;
@@ -902,11 +887,10 @@ fn processFlag1(self: *const TextData, idx: usize) !usize {
         defer self.allo.free(temp_field_name);
 
         const new_field_name = try prefixWithAt(self.allo, temp_field_name);
-        const new_field_value = try self.allo.dupe(u8, getValue(line, &.{}, &.{}));
+        const new_field_value = try std.fmt.parseInt(i128, getValue(line, &.{}, &.{}), 10);
 
         if (unique_names.get(new_field_name)) |_| {
             self.allo.free(new_field_name);
-            self.allo.free(new_field_value);
             continue;
         }
 
@@ -918,7 +902,6 @@ fn processFlag1(self: *const TextData, idx: usize) !usize {
             } else {
                 self.allo.free(new_field_name);
             }
-            self.allo.free(new_field_value);
             continue;
         }
 
@@ -935,13 +918,23 @@ fn processFlag1(self: *const TextData, idx: usize) !usize {
     for (fields.items) |field| {
         const newline = try allocPrint(
             self.allo,
-            "    {s} = {s},",
+            "    {s} = {},",
             .{ field.name, field.value },
         );
         defer self.allo.free(newline);
         try self.write(newline);
     }
     try self.write("};");
+
+    for (dup_fields.items) |field| {
+        const newline = try allocPrint(
+            self.allo,
+            "pub const {s} = {s}.{s};",
+            .{ field.new_name, title_name, field.old_name },
+        );
+        defer self.allo.free(newline);
+        try self.write(newline);
+    }
 
     line = self.getNextLine(start);
     start = self.getNextStart(start);
@@ -985,15 +978,21 @@ fn processFlag2(self: *const TextData, idx: usize) !usize {
 
     var fields = std.ArrayList(NameValue).init(self.allo);
     defer fields.deinit();
-    defer for (fields.items) |field| {
-        self.allo.free(field.name);
-        self.allo.free(field.value);
-    };
+    defer for (fields.items) |field| self.allo.free(field.name);
+
+    var dup_fields = std.ArrayList(NameName).init(self.allo);
+    defer dup_fields.deinit();
+    defer {
+        for (dup_fields.items) |field| {
+            self.allo.free(field.new_name);
+            self.allo.free(field.new_name);
+        }
+    }
 
     var unique_names = std.StringHashMap(void).init(self.allo);
     defer unique_names.deinit();
 
-    var unique_values = std.StringHashMap(usize).init(self.allo);
+    var unique_values = std.AutoHashMap(i128, usize).init(self.allo);
     defer unique_values.deinit();
 
     while (true) {
@@ -1020,11 +1019,10 @@ fn processFlag2(self: *const TextData, idx: usize) !usize {
         defer self.allo.free(temp_field_name);
 
         const new_field_name = try prefixWithAt(self.allo, temp_field_name);
-        const new_field_value = try self.allo.dupe(u8, getValue(line, &.{}, &.{}));
+        const new_field_value = try std.fmt.parseInt(i128, getValue(line, &.{}, &.{}), 10);
 
         if (unique_names.get(new_field_name)) |_| {
             self.allo.free(new_field_name);
-            self.allo.free(new_field_value);
             continue;
         }
 
@@ -1036,7 +1034,6 @@ fn processFlag2(self: *const TextData, idx: usize) !usize {
             } else {
                 self.allo.free(new_field_name);
             }
-            self.allo.free(new_field_value);
             continue;
         }
 
@@ -1054,13 +1051,23 @@ fn processFlag2(self: *const TextData, idx: usize) !usize {
     for (fields.items) |field| {
         const newline = try allocPrint(
             self.allo,
-            "    {s} = {s},",
+            "    {s} = {},",
             .{ field.name, field.value },
         );
         defer self.allo.free(newline);
         try self.write(newline);
     }
     try self.write("};");
+
+    for (dup_fields.items) |field| {
+        const newline = try allocPrint(
+            self.allo,
+            "pub const {s} = {s}.{s};",
+            .{ field.new_name, title_name, field.old_name },
+        );
+        defer self.allo.free(newline);
+        try self.write(newline);
+    }
 
     return start;
 }
@@ -1407,17 +1414,14 @@ fn prefixWithAt(allo: Allocator, data: []const u8) ![]const u8 {
 }
 
 fn sort(fields: *std.ArrayList(NameValue)) !void {
-    for (0..fields.items.len -% 1) |i| {
-        for (i +% 1..fields.items.len) |j| {
-            const value1 = fields.items[i].value;
-            const value2 = fields.items[j].value;
-            const is_n1 = value1[0] == '-';
-            const is_n2 = value2[0] == '-';
-            if (is_n1 and !is_n2) continue;
-            const is_shorter = value1.len < value2.len;
-            if (is_n1 and is_n2 and !is_shorter) continue;
-            if (!is_n1 and !is_n2 and is_shorter) continue;
-            swap(fields, i, j);
+    const len = fields.items.len;
+    for (0..len -% 1) |i| {
+        for (i +% 1..len) |j| {
+            if (fields.items[i].value > fields.items[j].value) {
+                const tmp = fields.items[i];
+                fields.items[i] = fields.items[j];
+                fields.items[j] = tmp;
+            }
         }
     }
 }
