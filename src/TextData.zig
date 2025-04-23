@@ -15,8 +15,10 @@ const allocPrint = std.fmt.allocPrint;
 const print = std.debug.print;
 const toLower = std.ascii.toLower;
 
+const trimLine = @import("helepers.zig").trimLine;
+const newline_chars = @import("helpers.zig").newline_chars;
+
 const builtin = @import("builtin");
-const newline_chars = if (builtin.os.tag == .windows) "\r\n" else "\n";
 
 const BitTricks = @import("BitTricks");
 const cc = @import("CodingCase");
@@ -299,7 +301,7 @@ fn isOpaqueVk(line: []const u8) bool {
 }
 
 fn isOpaque(line: []const u8) bool {
-    const new_line = trimLineEnd(line);
+    const new_line = trimLine(line);
     return endsWith(u8, new_line, "opaque {};");
 }
 
@@ -314,14 +316,14 @@ fn isExternUnion(line: []const u8) bool {
 }
 
 fn isExternStructVk(line: []const u8) bool {
-    const new_line = trimLineEnd(line);
+    const new_line = trimLine(line);
     const is_vk = startsWith(u8, new_line, "struct_Vk");
     const is_extern_struct = isExternStruct(line);
     return is_vk and is_extern_struct;
 }
 
 fn isExternStruct(line: []const u8) bool {
-    const new_line = trimLineEnd(line);
+    const new_line = trimLine(line);
     return endsWith(u8, new_line, "extern struct {");
 }
 
@@ -1296,13 +1298,9 @@ fn getStartOfPrevLine(self: *const TextData, end: usize) usize {
     return if (maybe_prev_idx) |prev_idx| prev_idx +% 1 else 0;
 }
 
-inline fn trimLineEnd(data: []const u8) []const u8 {
-    return trimRight(u8, data, newline_chars);
-}
-
 fn getNextLine(self: *const TextData, start: usize) []const u8 {
     const end = start +% self.getEndOfCurrLine(start);
-    return trimLineEnd(self.data[start..end]);
+    return trimLine(self.data[start..end]);
 }
 
 fn getNextStart(self: *const TextData, start: usize) usize {
@@ -1312,7 +1310,7 @@ fn getNextStart(self: *const TextData, start: usize) usize {
 
 fn getPrevLine(self: *const TextData, end: usize) []const u8 {
     const start = self.getStartOfPrevLine(end -% 1);
-    return trimLineEnd(self.data[start..end]);
+    return trimLine(self.data[start..end]);
 }
 
 fn getPrevStart(self: *const TextData, end: usize) usize {

@@ -3,6 +3,7 @@ const print = std.debug.print;
 const trimRight = std.mem.trimRight;
 const eql = std.mem.eql;
 const TextData = @import("TextData.zig");
+const trimLine = @import("helepers.zig").trimLine;
 
 // pub fn main() !void {
 //     var da = std.heap.DebugAllocator(.{}){};
@@ -133,8 +134,8 @@ test "Processing Vulkan File" {
         var dline: []const u8 = undefined;
         var eline: []const u8 = undefined;
         while (true) {
-            dline = if (try dreader.readUntilDelimiterOrEof(&dbuffer, '\n')) |line| trimRight(u8, line, "\r\n") else break;
-            eline = if (try ereader.readUntilDelimiterOrEof(&ebuffer, '\n')) |line| trimRight(u8, line, "\r\n") else break;
+            dline = if (try dreader.readUntilDelimiterOrEof(&dbuffer, '\n')) |line| trimLine(line) else break;
+            eline = if (try ereader.readUntilDelimiterOrEof(&ebuffer, '\n')) |line| trimLine(line) else break;
             std.testing.expectEqualStrings(dline, eline) catch |err| {
                 print("Failed on: {s}\n", .{filepath});
                 return err;
