@@ -577,11 +577,13 @@ fn writeSpecVersions(self: *TextData) !void {
 
 fn processPFN(self: *const TextData, idx: usize) !void {
     const line = self.getPrevLine(idx);
-    const newline = try replaceVkStrs(self.allo, line);
-    const underscore_idx = indexOfScalar(u8, newline, '_').? +% 1;
-    newline[underscore_idx] = toLower(newline[underscore_idx]);
-    defer self.allo.free(newline);
-    try self.write(newline);
+    var rline: []u8, var tmp: []u8 = .{ undefined, undefined };
+    rline = try replaceVkStrs(self.allo, line);
+    tmp = try replacePFN(self.allo, rline);
+    self.allo.free(rline);
+    rline = tmp;
+    defer self.allo.free(rline);
+    try self.write(rline);
 }
 
 fn processImport(self: *const TextData, idx: usize) !void {
@@ -1303,26 +1305,7 @@ fn convertArgs2Snake(allo: std.mem.Allocator, data: []const u8) ![]u8 {
         const open_paren_idx = lastIndexOfScalar(u8, rdata[0..colon_idx], '(').? +% 1;
         const old_name = rdata[open_paren_idx..colon_idx];
 
-        const new_name = cc.convert(allo, old_name, .snake) catch blk: {
-            break :blk try allo.dupe(u8, old_name);
-            // print("Line: {s} - {s} - {}", .{ @errorName(err), "InputDoesNatMatchAnyCase", eql(u8, @errorName(err), "InputDoesNatMatchAnyCase") });
-            // if (!eql(u8, @errorName(err), "InputDoesNatMatchAnyCase")) return err;
-            // var new_name_len: usize = 1;
-            // for (old_name[0 .. old_name.len -% 1], old_name[1..old_name.len]) |ch1, ch2| {
-            //     new_name_len +%= @intFromBool(isUpper(ch2) and (isLower(ch1) or isDigit(ch1))) +% 1;
-            // }
-            // var new_name = try allo.alloc(u8, new_name_len);
-            // new_name[0] = toLower(old_name[0]);
-            // var j: usize = 1;
-            // for (old_name[0 .. old_name.len -% 1], old_name[1..old_name.len]) |ch1, ch2| {
-            //     if (isUpper(ch2) and (isLower(ch1) or isDigit(ch1))) {
-            //         new_name[j] = '_';
-            //         j +%= 1;
-            //     }
-            //     new_name[j] = toLower(ch2);
-            // }
-            // break :blk new_name;
-        };
+        const new_name = cc.convert(allo, old_name, .snake) catch try allo.dupe(u8, old_name);
         defer allo.free(new_name);
 
         const temp = try replaceOwned(u8, allo, rdata, old_name, new_name);
