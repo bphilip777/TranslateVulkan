@@ -9,11 +9,14 @@ const indexOfScalar = std.mem.indexOfScalar;
 const lastIndexOfScalar = std.mem.lastIndexOfScalar;
 const trimRight = std.mem.trimRight;
 const trimLeft = std.mem.trimLeft;
-const isDigit = std.ascii.isDigit;
 const replaceOwned = std.mem.replaceOwned;
+
 const allocPrint = std.fmt.allocPrint;
+
 const print = std.debug.print;
+
 const toLower = std.ascii.toLower;
+const isDigit = std.ascii.isDigit;
 
 const trimLine = @import("helepers.zig").trimLine;
 const newline_chars = @import("helpers.zig").newline_chars;
