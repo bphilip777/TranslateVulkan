@@ -696,7 +696,6 @@ fn processExternStruct(self: *const TextData, idx: usize) !usize {
         try self.write(line);
         if (eql(u8, line, "};")) break;
     }
-    try self.write(line);
     return start;
 }
 
