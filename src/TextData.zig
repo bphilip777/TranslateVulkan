@@ -770,14 +770,14 @@ fn processEnum(self: *const TextData, idx: usize) !usize {
             const old_field_name = fields.items[fil].name;
             if (old_field_name.len > new_field_name.len) {
                 try dup_fields.append(.{
-                    .old_name = old_field_name,
-                    .new_name = try self.allo.dupe(u8, new_field_name),
+                    .old_name = try self.allo.dupe(u8, new_field_name),
+                    .new_name = old_field_name,
                 });
                 fields.items[fil].name = new_field_name;
             } else {
                 try dup_fields.append(.{
-                    .old_name = new_field_name,
-                    .new_name = try self.allo.dupe(u8, old_field_name),
+                    .old_name = try self.allo.dupe(u8, old_field_name),
+                    .new_name = new_field_name,
                 });
             }
             continue;
@@ -900,8 +900,8 @@ fn processFlag1(self: *const TextData, idx: usize) !usize {
             const old_field = fields.items[fil];
             if (old_field.name.len > new_field_name.len) {
                 try dup_fields.append(.{
-                    .old_name = old_field.name,
-                    .new_name = try self.allo.dupe(u8, new_field_name),
+                    .old_name = try self.allo.dupe(u8, new_field_name),
+                    .new_name = old_field.name,
                 });
                 fields.items[fil].name = new_field_name;
             } else {
@@ -1038,8 +1038,8 @@ fn processFlag2(self: *const TextData, idx: usize) !usize {
             const old_field_name = fields.items[fil].name;
             if (old_field_name.len > new_field_name.len) {
                 try dup_fields.append(.{
-                    .old_name = old_field_name,
-                    .new_name = try self.allo.dupe(u8, new_field_name),
+                    .old_name = try self.allo.dupe(u8, new_field_name),
+                    .new_name = old_field_name,
                 });
                 fields.items[fil].name = new_field_name;
             } else {
