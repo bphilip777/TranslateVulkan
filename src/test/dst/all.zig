@@ -167,7 +167,7 @@ pub inline fn makeApiVersion(variant: anytype, major: anytype, minor: anytype, p
 }
 pub const struct_threadmbcinfostruct = opaque {};
 pub const Buffer = enum(u64) { null = 0, _ };
-pub const PFN_AllocationFunction = ?*const fn (?*anyopaque, usize, usize, SystemAllocationScope) callconv(.c) ?*anyopaque;
+pub const PFN_allocationFunction = ?*const fn (?*anyopaque, usize, usize, SystemAllocationScope) callconv(.c) ?*anyopaque;
 pub const DWORD = c_ulong;
 pub const PVOID = ?*anyopaque;
 pub const ULONG_PTR = c_ulonglong;
