@@ -802,17 +802,19 @@ fn processEnum(self: *const TextData, idx: usize) !usize {
         defer self.allo.free(field_line);
         try self.write(field_line);
     }
-    try self.write("};");
-
-    for (dup_fields.items) |field| {
-        const field_line = try allocPrint(
-            self.allo,
-            "pub const {s} = {s}.{s};",
-            .{ field.new_name, title_name, field.old_name },
-        );
-        defer self.allo.free(field_line);
-        try self.write(field_line);
+    if (dup_fields.items.len > 0) {
+        try self.write("    pub const Self = @This();");
+        for (dup_fields.items) |field| {
+            const field_line = try allocPrint(
+                self.allo,
+                "    pub const {s} = Self.{s};",
+                .{ field.new_name, field.old_name },
+            );
+            defer self.allo.free(field_line);
+            try self.write(field_line);
+        }
     }
+    try self.write("};");
 
     line = self.getNextLine(idx);
     const start = self.getNextStart(idx);
@@ -932,17 +934,19 @@ fn processFlag1(self: *const TextData, idx: usize) !usize {
         defer self.allo.free(newline);
         try self.write(newline);
     }
-    try self.write("};");
-
-    for (dup_fields.items) |field| {
-        const newline = try allocPrint(
-            self.allo,
-            "pub const {s} = {s}.{s};",
-            .{ field.new_name, title_name, field.old_name },
-        );
-        defer self.allo.free(newline);
-        try self.write(newline);
+    if (dup_fields.items.len > 0) {
+        try self.write("    pub const Self = @This();");
+        for (dup_fields.items) |field| {
+            const newline = try allocPrint(
+                self.allo,
+                "    pub const {s} = Self.{s};",
+                .{ field.new_name, field.old_name },
+            );
+            defer self.allo.free(newline);
+            try self.write(newline);
+        }
     }
+    try self.write("};");
 
     line = self.getNextLine(start);
     start = self.getNextStart(start);
@@ -1070,17 +1074,19 @@ fn processFlag2(self: *const TextData, idx: usize) !usize {
         defer self.allo.free(newline);
         try self.write(newline);
     }
-    try self.write("};");
-
-    for (dup_fields.items) |field| {
-        const newline = try allocPrint(
-            self.allo,
-            "pub const {s} = {s}.{s};",
-            .{ field.new_name, title_name, field.old_name },
-        );
-        defer self.allo.free(newline);
-        try self.write(newline);
+    if (dup_fields.items.len > 0) {
+        try self.write("    pub const Self = @This();");
+        for (dup_fields.items) |field| {
+            const newline = try allocPrint(
+                self.allo,
+                "    pub const {s} = Self.{s};",
+                .{ field.new_name, field.old_name },
+            );
+            defer self.allo.free(newline);
+            try self.write(newline);
+        }
     }
+    try self.write("};");
 
     return start;
 }
