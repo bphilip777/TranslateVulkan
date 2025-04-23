@@ -767,17 +767,17 @@ fn processEnum(self: *const TextData, idx: usize) !usize {
         }
 
         if (unique_values.get(new_field_value)) |fil| {
-            const old_field = fields.items[fil];
-            if (old_field.name.len > new_field_name.len) {
+            const old_field_name = fields.items[fil].name;
+            if (old_field_name.len > new_field_name.len) {
                 try dup_fields.append(.{
-                    .old_name = old_field.name,
+                    .old_name = old_field_name,
                     .new_name = try self.allo.dupe(u8, new_field_name),
                 });
                 fields.items[fil].name = new_field_name;
             } else {
                 try dup_fields.append(.{
                     .old_name = new_field_name,
-                    .new_name = try self.allo.dupe(u8, old_field.name),
+                    .new_name = try self.allo.dupe(u8, old_field_name),
                 });
             }
             continue;
@@ -992,7 +992,7 @@ fn processFlag2(self: *const TextData, idx: usize) !usize {
     defer dup_fields.deinit();
     defer {
         for (dup_fields.items) |field| {
-            self.allo.free(field.new_name);
+            self.allo.free(field.old_name);
             self.allo.free(field.new_name);
         }
     }
@@ -1035,17 +1035,17 @@ fn processFlag2(self: *const TextData, idx: usize) !usize {
         }
 
         if (unique_values.get(new_field_value)) |fil| {
-            const old_field = fields.items[fil];
-            if (old_field.name.len > new_field_name.len) {
+            const old_field_name = fields.items[fil].name;
+            if (old_field_name.len > new_field_name.len) {
                 try dup_fields.append(.{
-                    .old_name = old_field.name,
+                    .old_name = old_field_name,
                     .new_name = try self.allo.dupe(u8, new_field_name),
                 });
                 fields.items[fil].name = new_field_name;
             } else {
                 try dup_fields.append(.{
                     .old_name = new_field_name,
-                    .new_name = try self.allo.dupe(u8, old_field.name),
+                    .new_name = try self.allo.dupe(u8, old_field_name),
                 });
             }
             continue;
@@ -1053,7 +1053,6 @@ fn processFlag2(self: *const TextData, idx: usize) !usize {
 
         try unique_names.put(new_field_name, {});
         try unique_values.put(new_field_value, fields.items.len);
-
         try fields.append(.{
             .name = new_field_name,
             .value = new_field_value,
@@ -1444,8 +1443,7 @@ fn isKeyword(word: []const u8) bool {
 }
 
 fn prefixWithAt(allo: Allocator, data: []const u8) ![]const u8 {
-    if (isKeyword(data) or isDigit(data[0])) return try allocPrint(allo, "@\"{s}\"", .{data});
-    return try allo.dupe(u8, data);
+    return if (isKeyword(data) or isDigit(data[0])) try allocPrint(allo, "@\"{s}\"", .{data}) else try allo.dupe(u8, data);
 }
 
 fn sort(fields: *std.ArrayList(NameValue)) !void {
