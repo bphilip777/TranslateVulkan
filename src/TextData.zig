@@ -682,7 +682,7 @@ fn processExternStructVk(self: *const TextData, idx: usize) !usize {
     }
     try self.write(line);
 
-    start = getNextStart(start);
+    start = self.getNextStart(start);
     return start;
 }
 
@@ -1205,8 +1205,7 @@ fn replaceVkStrs(allo: std.mem.Allocator, data: []const u8) ![]u8 {
             rdata = tmp;
         }
     }
-
-    const vk_strs = [_][]const u8{ "_vk", " vk", "]Vk", ")Vk", " Vk", "VK_" };
+    const vk_strs = [_][]const u8{ "_vk", " vk", "]Vk", ")Vk", " Vk", "(Vk", "VK_" };
     for (vk_strs) |vk_str| {
         if (indexOf(u8, rdata, vk_str) != null) {
             const tmp = try replaceOwned(u8, allo, rdata, vk_str, vk_str[0..1]);
@@ -1214,7 +1213,6 @@ fn replaceVkStrs(allo: std.mem.Allocator, data: []const u8) ![]u8 {
             rdata = tmp;
         }
     }
-
     return rdata;
 }
 
@@ -1238,6 +1236,7 @@ fn convertFieldName2Snake(allo: std.mem.Allocator, data: []const u8) ![]u8 {
     const space_idx = lastIndexOfScalar(u8, data[0..colon_idx], ' ').? +% 1;
     const name = data[space_idx..colon_idx];
     const new_name = try cc.convert(allo, name, .snake);
+    defer allo.free(new_name);
 
     var new_data = try allo.alloc(u8, data.len +% new_name.len -% name.len);
     @memset(new_data[0..space_idx], ' ');

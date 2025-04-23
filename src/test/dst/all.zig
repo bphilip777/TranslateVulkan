@@ -37,17 +37,14 @@ pub const struct_IMonikerVtbl = extern struct {
     ParseDisplayName: ?*const fn ([*c]IMoniker, [*c]IBindCtx, [*c]IMoniker, LPOLESTR, [*c]ULONG, [*c][*c]IMoniker) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IMoniker, [*c]IBindCtx, [*c]IMoniker, LPOLESTR, [*c]ULONG, [*c][*c]IMoniker) callconv(.c) HRESULT),
     IsSystemMoniker: ?*const fn ([*c]IMoniker, [*c]DWORD) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IMoniker, [*c]DWORD) callconv(.c) HRESULT),
 };
-};
 pub const Offset2D = extern struct {
     x: i32 = @import("std").mem.zeroes(i32),
     y: i32 = @import("std").mem.zeroes(i32),
 };
-pub const VkOffset2D = struct_VkOffset2D;
 pub const BaseInStructure = extern struct {
-    s_type: StructureType = @import("std").mem.zeroes(VkStructureType),
+    s_type: StructureType = @import("std").mem.zeroes(StructureType),
     p_next: [*c]const BaseInStructure = @import("std").mem.zeroes([*c]const BaseInStructure),
 };
-pub const VkBaseInStructure = struct_VkBaseInStructure;
 const union_unnamed_344 = extern union {
     hBitmap: HBITMAP,
     hMetaFilePict: HMETAFILEPICT,

@@ -45,7 +45,6 @@ pub const struct_IXMLDOMNotationVtbl = extern struct {
     get_publicId: ?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT) callconv(.c) HRESULT),
     get_systemId: ?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]VARIANT) callconv(.c) HRESULT),
 };
-};
 pub const struct_IMonikerVtbl = extern struct {
     QueryInterface: ?*const fn ([*c]IMoniker, [*c]const IID, [*c]?*anyopaque) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IMoniker, [*c]const IID, [*c]?*anyopaque) callconv(.c) HRESULT),
     AddRef: ?*const fn ([*c]IMoniker) callconv(.c) ULONG = @import("std").mem.zeroes(?*const fn ([*c]IMoniker) callconv(.c) ULONG),
@@ -70,5 +69,4 @@ pub const struct_IMonikerVtbl = extern struct {
     GetDisplayName: ?*const fn ([*c]IMoniker, [*c]IBindCtx, [*c]IMoniker, [*c]LPOLESTR) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IMoniker, [*c]IBindCtx, [*c]IMoniker, [*c]LPOLESTR) callconv(.c) HRESULT),
     ParseDisplayName: ?*const fn ([*c]IMoniker, [*c]IBindCtx, [*c]IMoniker, LPOLESTR, [*c]ULONG, [*c][*c]IMoniker) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IMoniker, [*c]IBindCtx, [*c]IMoniker, LPOLESTR, [*c]ULONG, [*c][*c]IMoniker) callconv(.c) HRESULT),
     IsSystemMoniker: ?*const fn ([*c]IMoniker, [*c]DWORD) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IMoniker, [*c]DWORD) callconv(.c) HRESULT),
-};
 };
