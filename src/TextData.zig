@@ -109,7 +109,7 @@ pub fn parse(self: *TextData) !void {
             .inline_fn_vk => start = (try self.processInlineFnVk(start)),
             .inline_fn => start = (try self.processInlineFn(start)),
             .@"extern" => start = (try self.processExtern(start)),
-            .extern_fn_vk => start = (try self.processExternFnVk(start)),
+            .extern_fn_vk => try self.processExternFnVk(start),
             .extern_fn => try self.processExternFn(start),
             .extern_var => try self.processExternVar(start),
             .extern_const => try self.processExternConst(start),
@@ -433,10 +433,8 @@ fn processExtern(self: *const TextData, idx: usize) !usize {
     return start;
 }
 
-fn processExternFnVk(self: *const TextData, idx: usize) !usize {
-    var start = idx;
-    const line = self.getPrevLine(start);
-    start = self.getNextStart(start);
+fn processExternFnVk(self: *const TextData, idx: usize) !void {
+    const line = self.getPrevLine(idx);
     const fn_name = getFnName(line, &.{"vk"}, &.{});
     const camel_fn_name = try cc.convert(self.allo, fn_name, .camel);
     defer self.allo.free(camel_fn_name);
@@ -447,7 +445,6 @@ fn processExternFnVk(self: *const TextData, idx: usize) !usize {
     const new_line = try convertArgs2Snake(self.allo, new_fn_line);
     defer self.allo.free(new_line);
     try self.write(new_line);
-    return start;
 }
 
 fn processExternFn(self: *const TextData, idx: usize) !void {
@@ -657,23 +654,29 @@ fn processExternStructVk(self: *const TextData, idx: usize) !usize {
     defer self.allo.free(title);
     try self.write(title);
 
+    var rline: []u8 = undefined;
+    var tmp: []u8 = undefined;
     while (true) {
         line = self.getNextLine(start);
         start = self.getNextStart(start);
         if (eql(u8, line, "};")) break;
 
-        const rline = convertFieldName2Snake(self.allo, line) catch |err| {
-            print("Line: {s}\n", .{line});
-            return err;
-        };
-        defer self.allo.free(rline);
+        rline = try convertFieldName2Snake(self.allo, line);
 
-        const rline1 = try replaceVkStrs(self.allo, rline);
-        defer self.allo.free(rline1);
+        tmp = try replaceVkStrs(self.allo, rline);
+        self.allo.free(rline);
+        rline = tmp;
 
-        const rline2 = try replaceFlags(self.allo, rline1);
-        defer self.allo.free(rline2);
-        try self.write(rline2);
+        tmp = try replaceFlags(self.allo, rline);
+        self.allo.free(rline);
+        rline = tmp;
+
+        tmp = try replacePFN(self.allo, rline);
+        self.allo.free(rline);
+        rline = tmp;
+
+        try self.write(rline);
+        self.allo.free(rline);
     }
     try self.write(line);
 
@@ -1254,10 +1257,21 @@ fn replaceFlags(allo: std.mem.Allocator, data: []const u8) ![]u8 {
         [_][]const u8{ "Flags2", "Flags2", "Flags", "Flags" },
     ) |old_suffix, new_suffix| {
         if (indexOf(u8, rdata, old_suffix) != null) {
-            const tmp = try std.mem.replaceOwned(u8, allo, rdata, old_suffix, new_suffix);
+            const tmp = try replaceOwned(u8, allo, rdata, old_suffix, new_suffix);
             allo.free(rdata);
             rdata = tmp;
         }
+    }
+    return rdata;
+}
+
+fn replacePFN(allo: Allocator, data: []const u8) ![]u8 {
+    const rdata: []u8 = try allo.dupe(u8, data);
+    var start: usize = 0;
+    const pfn = "PFN_";
+    while (indexOf(u8, rdata[start..], "PFN_")) |idx| {
+        start +%= idx +% pfn.len;
+        rdata[start] = toLower(rdata[start]);
     }
     return rdata;
 }
