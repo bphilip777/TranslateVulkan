@@ -135,7 +135,10 @@ test "Processing Vulkan File" {
         while (true) {
             dline = if (try dreader.readUntilDelimiterOrEof(&dbuffer, '\n')) |line| trimRight(u8, line, "\r\n") else break;
             eline = if (try ereader.readUntilDelimiterOrEof(&ebuffer, '\n')) |line| trimRight(u8, line, "\r\n") else break;
-            try std.testing.expectEqualStrings(dline, eline);
+            std.testing.expectEqualStrings(dline, eline) catch |err| {
+                print("Failed on: {s}\n", .{filepath});
+                return err;
+            };
         }
     }
 }
