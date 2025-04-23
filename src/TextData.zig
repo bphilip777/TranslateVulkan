@@ -590,11 +590,11 @@ fn writeSpecVersions(self: *const TextData) !void {
 
 fn processPFN(self: *const TextData, idx: usize) !void {
     const line = self.getPrevLine(idx);
-    const new_line = try replaceVkStrs(self.allo, line);
-    const under_idx = indexOfScalar(u8, new_line, ' ').? +% 1;
-    new_line[under_idx] = toLower(new_line[under_idx]);
-    defer self.allo.free(new_line);
-    try self.write(new_line);
+    const newline = try replaceVkStrs(self.allo, line);
+    const underscore_idx = indexOfScalar(u8, newline, '_').? +% 1;
+    newline[underscore_idx] = toLower(newline[underscore_idx]);
+    defer self.allo.free(newline);
+    try self.write(newline);
 }
 
 fn processImport(self: *const TextData, idx: usize) !void {
