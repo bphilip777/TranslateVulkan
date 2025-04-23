@@ -17,6 +17,8 @@ const print = std.debug.print;
 
 const toLower = std.ascii.toLower;
 const isDigit = std.ascii.isDigit;
+const isUpper = std.ascii.isUpper;
+const isLower = std.ascii.isLower;
 
 const trimLine = @import("helpers.zig").trimLine;
 const newline_chars = @import("helpers.zig").newline_chars;
@@ -895,12 +897,18 @@ fn processFlag1(self: *const TextData, idx: usize) !usize {
         }
 
         if (unique_values.get(new_field_value)) |fil| {
-            const old_field_name = fields.items[fil].name;
-            if (old_field_name.len > new_field_name.len) {
-                self.allo.free(old_field_name);
+            const old_field = fields.items[fil];
+            if (old_field.name.len > new_field_name.len) {
+                try dup_fields.append(.{
+                    .old_name = old_field.name,
+                    .new_name = try self.allo.dupe(u8, new_field_name),
+                });
                 fields.items[fil].name = new_field_name;
             } else {
-                self.allo.free(new_field_name);
+                try dup_fields.append(.{
+                    .old_name = new_field_name,
+                    .new_name = try self.allo.dupe(u8, old_field.name),
+                });
             }
             continue;
         }
@@ -1027,12 +1035,18 @@ fn processFlag2(self: *const TextData, idx: usize) !usize {
         }
 
         if (unique_values.get(new_field_value)) |fil| {
-            const old_field_name = fields.items[fil].name;
-            if (old_field_name.len > new_field_name.len) {
-                self.allo.free(fields.items[fil].name);
+            const old_field = fields.items[fil];
+            if (old_field.name.len > new_field_name.len) {
+                try dup_fields.append(.{
+                    .old_name = old_field.name,
+                    .new_name = try self.allo.dupe(u8, new_field_name),
+                });
                 fields.items[fil].name = new_field_name;
             } else {
-                self.allo.free(new_field_name);
+                try dup_fields.append(.{
+                    .old_name = new_field_name,
+                    .new_name = try self.allo.dupe(u8, old_field.name),
+                });
             }
             continue;
         }
@@ -1247,7 +1261,9 @@ fn convertFieldName2Snake(allo: std.mem.Allocator, data: []const u8) ![]u8 {
     const colon_idx = indexOfScalar(u8, data, ':').?;
     const space_idx = lastIndexOfScalar(u8, data[0..colon_idx], ' ').? +% 1;
     const name = data[space_idx..colon_idx];
-    const new_name = try cc.convert(allo, name, .snake);
+    const new_name = cc.convert(allo, name, .snake) catch blk: {
+        break :blk try allo.dupe(u8, name);
+    };
     defer allo.free(new_name);
 
     var new_data = try allo.alloc(u8, data.len +% new_name.len -% name.len);
@@ -1268,7 +1284,26 @@ fn convertArgs2Snake(allo: std.mem.Allocator, data: []const u8) ![]u8 {
         const open_paren_idx = lastIndexOfScalar(u8, rdata[0..colon_idx], '(').? +% 1;
         const old_name = rdata[open_paren_idx..colon_idx];
 
-        const new_name = try cc.convert(allo, old_name, .snake);
+        const new_name = cc.convert(allo, old_name, .snake) catch blk: {
+            break :blk try allo.dupe(u8, old_name);
+            // print("Line: {s} - {s} - {}", .{ @errorName(err), "InputDoesNatMatchAnyCase", eql(u8, @errorName(err), "InputDoesNatMatchAnyCase") });
+            // if (!eql(u8, @errorName(err), "InputDoesNatMatchAnyCase")) return err;
+            // var new_name_len: usize = 1;
+            // for (old_name[0 .. old_name.len -% 1], old_name[1..old_name.len]) |ch1, ch2| {
+            //     new_name_len +%= @intFromBool(isUpper(ch2) and (isLower(ch1) or isDigit(ch1))) +% 1;
+            // }
+            // var new_name = try allo.alloc(u8, new_name_len);
+            // new_name[0] = toLower(old_name[0]);
+            // var j: usize = 1;
+            // for (old_name[0 .. old_name.len -% 1], old_name[1..old_name.len]) |ch1, ch2| {
+            //     if (isUpper(ch2) and (isLower(ch1) or isDigit(ch1))) {
+            //         new_name[j] = '_';
+            //         j +%= 1;
+            //     }
+            //     new_name[j] = toLower(ch2);
+            // }
+            // break :blk new_name;
+        };
         defer allo.free(new_name);
 
         const temp = try replaceOwned(u8, allo, rdata, old_name, new_name);
