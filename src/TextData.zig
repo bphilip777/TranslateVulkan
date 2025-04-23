@@ -681,6 +681,8 @@ fn processExternStructVk(self: *const TextData, idx: usize) !usize {
         try self.write(rline2);
     }
     try self.write(line);
+
+    start = getNextStart(start);
     return start;
 }
 
