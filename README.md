@@ -29,7 +29,7 @@ const std = @import("std");
 const vk = @import("TranslateVulkan").vulkan;
 
 pub fn main() !void {
- const a = vk.InstanceCreateInfo{};
- _ = a;
+    const a = vk.InstanceCreateInfo{};
+    _ = a;
 }
 ```
