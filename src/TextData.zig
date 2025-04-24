@@ -41,6 +41,7 @@ type_names: std.ArrayList(NameName),
 extension_names: std.ArrayList(NameName),
 duplicate_extension_names: std.ArrayList(NameName),
 spec_versions: std.ArrayList(NameValue),
+compile_errors: std.ArrayList([]const u8),
 
 pub fn init(
     allo: std.mem.Allocator,
@@ -68,6 +69,7 @@ pub fn init(
         .extension_names = std.ArrayList(NameName).init(allo),
         .duplicate_extension_names = std.ArrayList(NameName).init(allo),
         .spec_versions = std.ArrayList(NameValue).init(allo),
+        .compile_errors = std.ArrayList([]const u8).init(allo),
     };
 }
 
@@ -209,6 +211,10 @@ fn determineLineType(line: []const u8) ?LineType {
     if (!startsWith(u8, line1, strs[1])) return null;
     const line2 = line1[strs[1].len +% 1 .. line1.len];
     if (isCompileError(line2)) return null;
+    if (hasCompileError(line2)) {
+        print("Line: {s}\n", .{line2});
+        return null;
+    }
     if (isExtensionName(line2)) return .extension_name;
     if (isSpecVersion(line2)) return .spec_version;
     if (isTypeName(line2)) return .type_name;
@@ -274,11 +280,18 @@ fn isSkip(line: []const u8) bool {
     return has_colon and is_screaming_snake and vk_name;
 }
 
-fn isCompileError(line: []const u8) bool {
+fn isCompileError(self: *TextData, line: []const u8) bool {
     const open_paren_idx = indexOfScalar(u8, line, '(') orelse return false;
     const space_idx = lastIndexOfScalar(u8, line[0..open_paren_idx], ' ').? +% 1;
     const name = line[space_idx..open_paren_idx];
+    try self.compile_errors.append(try self.allo.dupe(u8, name));
     return eql(u8, name, "@compileError");
+}
+
+fn hasCompileError(self: *const TextData, line: []const u8) bool {
+    for (self.compile_errors.items) |ce| {
+        if (indexOf(u8, line, ce)) return true;
+    } else return false;
 }
 
 fn isExtensionName(line: []const u8) bool {
