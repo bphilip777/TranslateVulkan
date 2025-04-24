@@ -28,19 +28,23 @@ const builtin = @import("builtin");
 const BitTricks = @import("BitTricks");
 const cc = @import("CodingCase");
 
-const NameName = @import("NameName.zig");
-const NameValue = @import("NameValue.zig");
-
+const TypeNameStruct = struct { name: []const u8, value: []const u8 };
+const ExtensionNameStruct = struct { field: []const u8, ext: []const u8 };
+const EnumStruct = struct { name: []const u8, value: u64, sign: bool };
+const FlagBitsStruct = struct { name: []const u8, value: u32 };
+const FlagBits2Struct = struct { name: []const u8, value: u64 };
+const SpecVersionStruct = struct { name: []const u8, value: i32 };
+const DupFieldStruct = struct { old: []const u8, new: []const u8 };
 const TextData = @This();
 
 allo: std.mem.Allocator,
 data: []const u8,
 wfile: std.fs.File,
 
-type_names: std.ArrayList(NameName),
-extension_names: std.ArrayList(NameName),
-duplicate_extension_names: std.ArrayList(NameName),
-spec_versions: std.ArrayList(NameValue),
+type_names: std.ArrayList(TypeNameStruct),
+extension_names: std.ArrayList(ExtensionNameStruct),
+duplicate_extension_names: std.ArrayList(ExtensionNameStruct),
+spec_versions: std.ArrayList(SpecVersionStruct),
 compile_errors: std.ArrayList([]const u8),
 
 pub fn init(
@@ -65,10 +69,10 @@ pub fn init(
         .wfile = wfile,
         .data = data,
 
-        .type_names = std.ArrayList(NameName).init(allo),
-        .extension_names = std.ArrayList(NameName).init(allo),
-        .duplicate_extension_names = std.ArrayList(NameName).init(allo),
-        .spec_versions = std.ArrayList(NameValue).init(allo),
+        .type_names = std.ArrayList(TypeNameStruct).init(allo),
+        .extension_names = std.ArrayList(ExtensionNameStruct).init(allo),
+        .duplicate_extension_names = std.ArrayList(ExtensionNameStruct).init(allo),
+        .spec_versions = std.ArrayList(SpecVersionStruct).init(allo),
         .compile_errors = std.ArrayList([]const u8).init(allo),
     };
 }
@@ -79,24 +83,24 @@ pub fn deinit(self: *TextData) void {
 
     if (self.type_names.items.len > 0) {
         for (self.type_names.items) |tn| {
-            self.allo.free(tn.old_name);
-            self.allo.free(tn.new_name);
+            self.allo.free(tn.name);
+            self.allo.free(tn.value);
         }
     }
     self.type_names.deinit();
 
     if (self.extension_names.items.len > 0) {
         for (self.extension_names.items) |en| {
-            self.allo.free(en.old_name);
-            self.allo.free(en.new_name);
+            self.allo.free(en.name);
+            self.allo.free(en.ext);
         }
     }
     self.extension_names.deinit();
 
     if (self.duplicate_extension_names.items.len > 0) {
         for (self.duplicate_extension_names.items) |den| {
-            self.allo.free(den.old_name);
-            self.allo.free(den.new_name);
+            self.allo.free(den.old);
+            self.allo.free(den.new);
         }
     }
     self.duplicate_extension_names.deinit();
@@ -536,19 +540,15 @@ fn processTypeName(self: *TextData, idx: usize) !void {
     const new_field_name = try allocPrint(self.allo, "{s}: {s}", .{ word, type_name });
     const new_field_value = try self.allo.dupe(u8, getValue(line, &.{}, &.{}));
     try self.type_names.append(.{
-        .old_name = new_field_name,
-        .new_name = new_field_value,
+        .name = new_field_name,
+        .value = new_field_value,
     });
 }
 
 fn writeTypeNames(self: *const TextData) !void {
     try self.write("pub const TypeNames = struct {");
     for (self.type_names.items) |tn| {
-        const newline = try allocPrint(
-            self.allo,
-            "    {s} = {s},",
-            .{ tn.old_name, tn.new_name },
-        );
+        const newline = try allocPrint(self.allo, "    {s} = {s},", .{ tn.name, tn.value });
         defer self.allo.free(newline);
         try self.write(newline);
     }
@@ -575,9 +575,9 @@ fn processExtensionName(self: *TextData, idx: usize) !void {
         break :blk try self.allo.dupe(u8, value);
     };
 
-    try self.duplicate_extension_names.append(NameName{
-        .old_name = new_field_name,
-        .new_name = new_field_value,
+    try self.duplicate_extension_names.append(.{
+        .field = new_field_name,
+        .ext = new_field_value,
     });
 }
 
@@ -783,12 +783,12 @@ fn processEnum(self: *const TextData, idx: usize) !usize {
     var line = self.getPrevLine(idx);
     const title_name = getName(line, &.{"enum_Vk"}, &.{});
     const is_result = eql(u8, title_name, "Result");
-    const title_value = if (eql(u8, getValue(line, &.{}, &.{}), "c_uint")) "u32" else "i32";
+    const title_type: type = if (eql(u8, getValue(line, &.{}, &.{}), "c_uint")) u32 else i32;
 
     const newline = try allocPrint(
         self.allo,
         "pub const {s} = enum({s}) {{",
-        .{ title_name, title_value },
+        .{ title_name, @typeName(title_type) },
     );
     defer self.allo.free(newline);
     try self.write(newline);
@@ -797,24 +797,27 @@ fn processEnum(self: *const TextData, idx: usize) !usize {
     defer title_words.deinit();
     defer for (title_words.items) |title_word| self.allo.free(title_word);
 
-    var fields = std.ArrayList(NameValue).init(self.allo);
+    var fields = std.ArrayList(EnumStruct).init(self.allo);
     defer fields.deinit();
     defer for (fields.items) |field| self.allo.free(field.name);
 
-    var dup_fields = std.ArrayList(NameName).init(self.allo);
+    var dup_fields = std.ArrayList(DupFieldStruct).init(self.allo);
     defer dup_fields.deinit();
     defer {
         for (dup_fields.items) |field| {
-            self.allo.free(field.old_name);
-            self.allo.free(field.new_name);
+            self.allo.free(field.old);
+            self.allo.free(field.new);
         }
     }
 
     var unique_names = std.StringHashMap(void).init(self.allo);
     defer unique_names.deinit();
 
-    var unique_values = std.AutoHashMap(i128, usize).init(self.allo);
-    defer unique_values.deinit();
+    var unique_values1 = std.AutoHashMap(u32, usize).init(self.allo);
+    defer unique_values1.deinit();
+
+    var unique_values2 = std.AutoHashMap(i32, usize).init(self.allo);
+    defer unique_values2.deinit();
 
     var curr = self.getPrevStart(idx);
     while (curr > 0) {
@@ -840,7 +843,10 @@ fn processEnum(self: *const TextData, idx: usize) !usize {
             self.allo.free(word);
         }
 
-        const temp_field_name = if (name_words.items.len > 0) try cc.words2Snake(self.allo, name_words) else try self.allo.dupe(u8, "_base");
+        const temp_field_name = if (name_words.items.len > 0)
+            try cc.words2Snake(self.allo, name_words)
+        else
+            try self.allo.dupe(u8, "_base");
         defer self.allo.free(temp_field_name);
 
         const new_field_name = try prefixWithAt(self.allo, temp_field_name);
@@ -851,7 +857,7 @@ fn processEnum(self: *const TextData, idx: usize) !usize {
             continue;
         }
 
-        if (unique_values.get(new_field_value)) |fil| {
+        if (unique_values1.get(new_field_value)) |fil| {
             const old_field_name = fields.items[fil].name;
             if (old_field_name.len > new_field_name.len) {
                 try dup_fields.append(.{
@@ -909,26 +915,25 @@ fn processEnum(self: *const TextData, idx: usize) !usize {
 fn processFlag1(self: *const TextData, idx: usize) !usize {
     const prev_line = self.getPrevLine(idx);
     var line = prev_line;
-
-    const title_type = if (eql(u8, getValue(line, &.{}, &.{}), "c_uint")) "u32" else "i32";
+    const title_type = "u32";
 
     line = self.getNextLine(idx);
     var start = self.getNextStart(idx);
-    const title_name = getName(line, &.{"Vk"}, &.{ "FlagBitsKHR", "FlagBits" });
+    const title_name = getName(line, &.{"Vk"}, &.{});
     const title_line = try allocPrint(
         self.allo,
-        "pub const {s}Flags = enum({s}) {{",
+        "pub const {s} = enum({s}) {{",
         .{ title_name, title_type },
     );
     defer self.allo.free(title_line);
     try self.write(title_line);
 
-    const name = getName(line, &.{"Vk"}, &.{});
-    var title_words = try cc.split2Words(self.allo, name);
+    // const name = getName(line, &.{"Vk"}, &.{});
+    var title_words = try cc.split2Words(self.allo, title_name);
     defer title_words.deinit();
     defer for (title_words.items) |title_word| self.allo.free(title_word);
 
-    var fields = std.ArrayList(NameName).init(self.allo);
+    var fields = std.ArrayList().init(self.allo);
     defer fields.deinit();
     defer {
         for (fields.items) |field| {
@@ -937,12 +942,12 @@ fn processFlag1(self: *const TextData, idx: usize) !usize {
         }
     }
 
-    var dup_fields = std.ArrayList(NameName).init(self.allo);
+    var dup_fields = std.ArrayList(DupFieldStruct).init(self.allo);
     defer dup_fields.deinit();
     defer {
         for (dup_fields.items) |field| {
-            self.allo.free(field.old_name);
-            self.allo.free(field.new_name);
+            self.allo.free(field.old);
+            self.allo.free(field.new);
         }
     }
 
@@ -1054,8 +1059,9 @@ fn processFlag1(self: *const TextData, idx: usize) !usize {
 fn processFlag2(self: *const TextData, idx: usize) !usize {
     var line = self.getPrevLine(idx);
 
+    const title_type = "u64";
+
     const title_name = getName(line, &.{"Vk"}, &.{});
-    const title_type = if (eql(u8, getValue(line, &.{}, &.{}), "c_uint")) "u32" else "i32";
     const title_line = try allocPrint(
         self.allo,
         "pub const {s} = enum({s}) {{",
@@ -1086,11 +1092,11 @@ fn processFlag2(self: *const TextData, idx: usize) !usize {
         start = self.getNextStart(idx);
     }
 
-    var fields = std.ArrayList(NameValue).init(self.allo);
+    var fields = std.ArrayList(FlagBits2Struct).init(self.allo);
     defer fields.deinit();
     defer for (fields.items) |field| self.allo.free(field.name);
 
-    var dup_fields = std.ArrayList(NameName).init(self.allo);
+    var dup_fields = std.ArrayList(FlagBits2Struct).init(self.allo);
     defer dup_fields.deinit();
     defer {
         for (dup_fields.items) |field| {
@@ -1544,7 +1550,17 @@ fn prefixWithAt(allo: Allocator, data: []const u8) ![]const u8 {
     return try allo.dupe(u8, data);
 }
 
-fn sortNameValue(fields: *std.ArrayList(NameValue)) !void {
+const SortableStruct = union(enum) {
+    a: std.ArrayList(EnumStruct),
+    b: std.ArrayList(FlagBitsStruct),
+    c: std.ArrayList(FlagBits2Struct),
+    d: std.ArrayList(SpecVersionStruct),
+};
+
+fn sort(SS: *SortableStruct) !void {
+    const fields = switch (SS) {
+        else => |field| field,
+    };
     const len = fields.items.len;
     for (0..len -% 1) |i| {
         for (i +% 1..len) |j| {
@@ -1557,31 +1573,14 @@ fn sortNameValue(fields: *std.ArrayList(NameValue)) !void {
     }
 }
 
-fn swapNameValue(fields: *std.ArrayList(NameValue), i: usize, j: usize) void {
-    if (fields.items.len == 0) unreachable;
+fn swap(SS: *SortableStruct, i: usize, j: usize) void {
     if (i == j) unreachable;
+    const fields = switch (SS) {
+        else => |field| field,
+    };
+    if (fields.items.len == 0) unreachable;
     if (i > fields.items.len or j > fields.items.len) unreachable;
     const tmp = fields.items[i];
     fields.items[i] = fields.items[j];
     fields.items[j] = tmp;
-}
-
-pub const BaseShiftSign = struct {
-    base: bool,
-    shift: u64,
-    sign: bool,
-};
-
-fn parseBaseShiftSign(data: []const u8) !BaseShiftSign {
-    if (data.len == 0) unreachable;
-    const sign: bool = data[0] == '-';
-    const value1 = if (sign) data[1..data.len] else data;
-    const value2 = try std.fmt.parseInt(u64, value1, 10);
-    const shift: u8 = if (value2 > 0) @truncate(std.math.log2(value2)) else 0;
-    const base: bool = value2 > 0;
-    return .{
-        .base = base,
-        .shift = shift,
-        .sign = sign,
-    };
 }
