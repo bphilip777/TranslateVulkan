@@ -215,6 +215,7 @@ fn determineLineType(line: []const u8) ?LineType {
         print("Line: {s}\n", .{line2});
         return null;
     }
+    if (isScreamingSnake(line2)) return null;
     if (isExtensionName(line2)) return .extension_name;
     if (isSpecVersion(line2)) return .spec_version;
     if (isTypeName(line2)) return .type_name;
@@ -226,7 +227,6 @@ fn determineLineType(line: []const u8) ?LineType {
     if (isExternUnion(line2)) return .extern_union;
     if (isExternStructVk(line2)) return .extern_struct_vk;
     if (isExternStruct(line2)) return .extern_struct;
-    if (isSkip(line2)) return null;
     if (isFlag1(line2)) return .flag1;
     if (isFlag2(line2)) return .flag2;
     if (isEnum(line2)) return .@"enum";
@@ -272,7 +272,7 @@ fn isExportVar(line: []const u8) bool {
     return startsWith(u8, line, "export var");
 }
 
-fn isSkip(line: []const u8) bool {
+fn isScreamingSnake(line: []const u8) bool {
     const name = getTrimName(line);
     const has_colon = name[name.len -% 1] == ':';
     const is_screaming_snake = cc.isCase(name[0 .. name.len -% 1], .screaming_snake);
