@@ -7,6 +7,7 @@ pub fn build(b: *std.Build) void {
     // dependencies:
     const BitTricks = b.dependency("BitTricks", .{});
     const CodingCase = b.dependency("CodingCase", .{});
+    const PackedEnumSet = b.dependency("PackedEnumSet", .{});
 
     const exe_mod = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
@@ -23,6 +24,7 @@ pub fn build(b: *std.Build) void {
     exe.addIncludePath(b.path("Vulkan/Include"));
     exe.root_module.addImport("BitTricks", BitTricks.module("BitTricks"));
     exe.root_module.addImport("CodingCase", CodingCase.module("CodingCase"));
+    exe.root_module.addImport("PackedEnumSet", PackedEnumSet.module("PackedEnumSet"));
     b.installArtifact(exe);
 
     const run_cmd = b.addRunArtifact(exe);
@@ -46,6 +48,7 @@ pub fn build(b: *std.Build) void {
     exe_unit_tests.addIncludePath(b.path("Vulkan/Include"));
     exe_unit_tests.root_module.addImport("BitTricks", BitTricks.module("BitTricks"));
     exe_unit_tests.root_module.addImport("CodingCase", CodingCase.module("CodingCase"));
+    exe_unit_tests.root_module.addImport("PackedEnumSet", PackedEnumSet.module("PackedEnumSet"));
     b.installArtifact(exe_unit_tests);
 
     const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);

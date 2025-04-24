@@ -44,6 +44,10 @@
             .url = "git+https://github.com/bphilip777/CodingCase.git#11b1587a3277ca392d758cdf855b74545d01b61a",
             .hash = "CodingCase-0.0.0-0crab-FGAABUtJCAJ2Sd4aob-SQ8s3GhGW4RW5G6X_VG",
         },
+        .PackedEnumSet = .{
+            .url = "git+https://github.com/bphilip777/PackedEnumSet.git#691a454ee4abbe6480848f411b13d515b1ce8103",
+            .hash = "PackedEnumSet-0.0.0-oZSdHpgcAAB0UyAQS6093ptUvF3TiRkMDzMslHxZl2le",
+        },
     },
     .paths = .{
         "build.zig",

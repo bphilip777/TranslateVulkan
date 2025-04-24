@@ -105,6 +105,11 @@ pub fn deinit(self: *TextData) void {
         for (self.spec_versions.items) |sv| self.allo.free(sv.name);
     }
     self.spec_versions.deinit();
+
+    if (self.compile_errors.items.len > 0) {
+        for (self.compile_errors.items) |ce| self.allo.free(ce);
+    }
+    self.compile_errors.deinit();
 }
 
 pub fn parse(self: *TextData) !void {
@@ -114,7 +119,7 @@ pub fn parse(self: *TextData) !void {
         const line = self.getNextLine(start);
         // print("Line: {s}\n", .{line});
         start = self.getNextStart(start);
-        const linetype = determineLineType(line) orelse continue;
+        const linetype = (try self.determineLineType(line)) orelse continue;
         // print("Line Type: {s}\n", .{@tagName(linetype)});
 
         switch (linetype) {
@@ -185,7 +190,7 @@ const LineType = enum {
     base,
 };
 
-fn determineLineType(line: []const u8) ?LineType {
+fn determineLineType(self: *TextData, line: []const u8) !?LineType {
     const strs = [_][]const u8{ "pub", "const" };
 
     var line1: []const u8 = undefined;
@@ -210,8 +215,8 @@ fn determineLineType(line: []const u8) ?LineType {
 
     if (!startsWith(u8, line1, strs[1])) return null;
     const line2 = line1[strs[1].len +% 1 .. line1.len];
-    if (isCompileError(line2)) return null;
-    if (hasCompileError(line2)) {
+    if (try self.isCompileError(line2)) return null;
+    if (self.hasCompileError(line2)) {
         print("Line: {s}\n", .{line2});
         return null;
     }
@@ -280,17 +285,19 @@ fn isScreamingSnake(line: []const u8) bool {
     return has_colon and is_screaming_snake and vk_name;
 }
 
-fn isCompileError(self: *TextData, line: []const u8) bool {
+fn isCompileError(self: *TextData, line: []const u8) !bool {
     const open_paren_idx = indexOfScalar(u8, line, '(') orelse return false;
     const space_idx = lastIndexOfScalar(u8, line[0..open_paren_idx], ' ').? +% 1;
     const name = line[space_idx..open_paren_idx];
-    try self.compile_errors.append(try self.allo.dupe(u8, name));
+    const new_name = try self.allo.dupe(u8, name);
+    try self.compile_errors.append(new_name);
     return eql(u8, name, "@compileError");
 }
 
 fn hasCompileError(self: *const TextData, line: []const u8) bool {
+    if (self.compile_errors.items.len == 0) return false;
     for (self.compile_errors.items) |ce| {
-        if (indexOf(u8, line, ce)) return true;
+        if (indexOf(u8, line, ce) != null) return true;
     } else return false;
 }
 
@@ -921,9 +928,14 @@ fn processFlag1(self: *const TextData, idx: usize) !usize {
     defer title_words.deinit();
     defer for (title_words.items) |title_word| self.allo.free(title_word);
 
-    var fields = std.ArrayList(NameValue).init(self.allo);
+    var fields = std.ArrayList(NameName).init(self.allo);
     defer fields.deinit();
-    defer for (fields.items) |field| self.allo.free(field.name);
+    defer {
+        for (fields.items) |field| {
+            self.allo.free(field.old_name);
+            self.allo.free(field.new_name);
+        }
+    }
 
     var dup_fields = std.ArrayList(NameName).init(self.allo);
     defer dup_fields.deinit();
@@ -937,42 +949,49 @@ fn processFlag1(self: *const TextData, idx: usize) !usize {
     var unique_names = std.StringHashMap(void).init(self.allo);
     defer unique_names.deinit();
 
-    var unique_values = std.AutoHashMap(i128, usize).init(self.allo);
+    var unique_values = std.StringHashMap(usize).init(self.allo);
     defer unique_values.deinit();
 
     line = prev_line;
     var curr = self.getPrevStart(idx);
-    while (curr > 0) {
+    outer: while (curr > 0) {
         line = self.getPrevLine(curr);
         curr = self.getPrevStart(curr);
-        const ssn = getScreamingSnakeName(line, &.{"VK_"}, &.{}) orelse break;
 
-        const new_name = try cc.convert(self.allo, ssn, .snake);
-        defer self.allo.free(new_name);
+        const new_field_name = blk: {
+            const ssn = getScreamingSnakeName(line, &.{"VK_"}, &.{}) orelse break :outer;
+            const new_name = try cc.convert(self.allo, ssn, .snake);
+            defer self.allo.free(new_name);
 
-        var name_words = try cc.split2Words(self.allo, new_name);
-        defer name_words.deinit();
-        defer for (name_words.items) |name_word| self.allo.free(name_word);
+            var name_words = try cc.split2Words(self.allo, new_name);
+            defer name_words.deinit();
+            defer for (name_words.items) |name_word| self.allo.free(name_word);
 
-        const matches = try getMatches(self.allo, &name_words, &title_words);
-        defer self.allo.free(matches);
-        if (!anyMatches(matches)) break;
+            const matches = try getMatches(self.allo, &name_words, &title_words);
+            defer self.allo.free(matches);
+            if (!anyMatches(matches)) break :outer;
 
-        for (0..matches.len) |i| {
-            const j = matches.len -% i -% 1;
-            if (!matches[j]) continue;
-            const word = name_words.orderedRemove(j);
-            self.allo.free(word);
-        }
+            for (0..matches.len) |i| {
+                const j = matches.len -% i -% 1;
+                if (!matches[j]) continue;
+                const word = name_words.orderedRemove(j);
+                self.allo.free(word);
+            }
 
-        const temp_field_name = if (name_words.items.len > 0) try cc.words2Snake(self.allo, name_words) else try self.allo.dupe(u8, "_base");
-        defer self.allo.free(temp_field_name);
+            const temp_field_name = if (name_words.items.len > 0) try cc.words2Snake(self.allo, name_words) else try self.allo.dupe(u8, "_base");
+            defer self.allo.free(temp_field_name);
 
-        const new_field_name = try prefixWithAt(self.allo, temp_field_name);
-        const new_field_value = try std.fmt.parseInt(i128, getValue(line, &.{}, &.{}), 10);
+            break :blk try prefixWithAt(self.allo, temp_field_name);
+        };
+
+        const new_field_value = blk: {
+            const value = getValue(line, &.{}, &.{});
+            break :blk try self.allo.dupe(u8, value);
+        };
 
         if (unique_names.get(new_field_name)) |_| {
             self.allo.free(new_field_name);
+            self.allo.free(new_field_value);
             continue;
         }
 
@@ -990,6 +1009,7 @@ fn processFlag1(self: *const TextData, idx: usize) !usize {
                     .new_name = new_field_name,
                 });
             }
+            self.allo.free(new_field_value);
             continue;
         }
 
@@ -1524,7 +1544,7 @@ fn prefixWithAt(allo: Allocator, data: []const u8) ![]const u8 {
     return try allo.dupe(u8, data);
 }
 
-fn sort(fields: *std.ArrayList(NameValue)) !void {
+fn sortNameValue(fields: *std.ArrayList(NameValue)) !void {
     const len = fields.items.len;
     for (0..len -% 1) |i| {
         for (i +% 1..len) |j| {
@@ -1537,11 +1557,31 @@ fn sort(fields: *std.ArrayList(NameValue)) !void {
     }
 }
 
-fn swap(fields: *std.ArrayList(NameValue), i: usize, j: usize) void {
+fn swapNameValue(fields: *std.ArrayList(NameValue), i: usize, j: usize) void {
     if (fields.items.len == 0) unreachable;
     if (i == j) unreachable;
     if (i > fields.items.len or j > fields.items.len) unreachable;
     const tmp = fields.items[i];
     fields.items[i] = fields.items[j];
     fields.items[j] = tmp;
+}
+
+pub const BaseShiftSign = struct {
+    base: bool,
+    shift: u64,
+    sign: bool,
+};
+
+fn parseBaseShiftSign(data: []const u8) !BaseShiftSign {
+    if (data.len == 0) unreachable;
+    const sign: bool = data[0] == '-';
+    const value1 = if (sign) data[1..data.len] else data;
+    const value2 = try std.fmt.parseInt(u64, value1, 10);
+    const shift: u8 = if (value2 > 0) @truncate(std.math.log2(value2)) else 0;
+    const base: bool = value2 > 0;
+    return .{
+        .base = base,
+        .shift = shift,
+        .sign = sign,
+    };
 }
