@@ -39,7 +39,7 @@ wfile: std.fs.File,
 
 type_names: std.ArrayList(NameName),
 extension_names: std.ArrayList(NameName),
-dup_extension_names: std.ArrayList(NameName),
+duplicate_extension_names: std.ArrayList(NameName),
 spec_versions: std.ArrayList(NameValue),
 
 pub fn init(
@@ -66,7 +66,7 @@ pub fn init(
 
         .type_names = std.ArrayList(NameName).init(allo),
         .extension_names = std.ArrayList(NameName).init(allo),
-        .dup_extension_names = std.ArrayList(NameName).init(allo),
+        .duplicate_extension_names = std.ArrayList(NameName).init(allo),
         .spec_versions = std.ArrayList(NameValue).init(allo),
     };
 }
@@ -91,12 +91,13 @@ pub fn deinit(self: *TextData) void {
     }
     self.extension_names.deinit();
 
-    if (self.dup_extension_names.items.len > 0) {
-        for (self.dup_extension_names.items) |den| {
+    if (self.duplicate_extension_names.items.len > 0) {
+        for (self.duplicate_extension_names.items) |den| {
             self.allo.free(den.old_name);
             self.allo.free(den.new_name);
         }
     }
+    self.duplicate_extension_names.deinit();
 
     if (self.spec_versions.items.len > 0) {
         for (self.spec_versions.items) |sv| self.allo.free(sv.name);
@@ -537,29 +538,27 @@ fn writeTypeNames(self: *const TextData) !void {
 fn processExtensionName(self: *TextData, idx: usize) !void {
     const line = self.getPrevLine(idx);
 
-    const name = getName(line, &.{ "VK_KHR_", "VK_" }, &.{"_EXTENSION_NAME"});
-    const field_name = try cc.convert(self.allo, name, .snake);
-    defer self.allo.free(field_name);
-    const new_field_name = try prefixWithAt(self.allo, field_name);
+    const new_field_name = blk: {
+        const name = getName(line, &.{ "VK_KHR_", "VK_" }, &.{"_EXTENSION_NAME"});
+        const field_name = try cc.convert(self.allo, name, .snake);
+        defer self.allo.free(field_name);
+        break :blk try prefixWithAt(self.allo, field_name);
+    };
 
-    const value = getValue(line, &.{ "VK_KHR_", "VK_" }, &.{"_EXTENSION_NAME"});
-    if (value[0] != '\"') {
-        print("Value: {s}\n", .{value});
-        const field_value = try cc.convert(self.allo, value, .snake);
-        defer self.allo.free(field_value);
-        const new_field_value = try prefixWithAt(self.allo, field_value);
+    const new_field_value = blk: {
+        const value = getValue(line, &.{ "VK_KHR_", "VK_" }, &.{"_EXTENSION_NAME"});
+        if (value[0] != '\"') {
+            const field_value = try cc.convert(self.allo, value, .snake);
+            defer self.allo.free(field_value);
+            break :blk try prefixWithAt(self.allo, field_value);
+        }
+        break :blk try self.allo.dupe(u8, value);
+    };
 
-        try self.dup_extension_names.append(.{
-            .old_name = new_field_name,
-            .new_name = new_field_value,
-        });
-    } else {
-        const new_field_value = try self.allo.dupe(u8, value);
-        try self.extension_names.append(.{
-            .old_name = new_field_name,
-            .new_name = new_field_value,
-        });
-    }
+    try self.duplicate_extension_names.append(NameName{
+        .old_name = new_field_name,
+        .new_name = new_field_value,
+    });
 }
 
 fn writeExtensionNames(self: *const TextData) !void {
@@ -573,9 +572,10 @@ fn writeExtensionNames(self: *const TextData) !void {
         defer self.allo.free(newline);
         try self.write(newline);
     }
-    if (self.dup_extension_names.items.len > 0) {
+
+    if (self.duplicate_extension_names.items.len > 0) {
         try self.write("    const Self = @This();");
-        for (self.dup_extension_names.items) |den| {
+        for (self.duplicate_extension_names.items) |den| {
             const newline = try allocPrint(
                 self.allo,
                 "     pub const {s} = Self.{s};",
@@ -585,6 +585,7 @@ fn writeExtensionNames(self: *const TextData) !void {
             try self.write(newline);
         }
     }
+
     try self.write("};");
 }
 
