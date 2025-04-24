@@ -12,6 +12,7 @@ const trimLeft = std.mem.trimLeft;
 const replaceOwned = std.mem.replaceOwned;
 
 const allocPrint = std.fmt.allocPrint;
+const parseInt = std.fmt.parseInt;
 
 const print = std.debug.print;
 
@@ -30,7 +31,11 @@ const cc = @import("CodingCase");
 
 const TypeNameStruct = struct { name: []const u8, value: []const u8 };
 const ExtensionNameStruct = struct { field: []const u8, ext: []const u8 };
-const EnumStruct = struct { name: []const u8, value: u64, sign: bool };
+
+const EnumType = enum { u, i };
+const WhichValue = union(EnumType) { u: u32, i: i32 };
+const EnumStruct = struct { name: []const u8, value: WhichValue };
+
 const FlagBitsStruct = struct { name: []const u8, value: u32 };
 const FlagBits2Struct = struct { name: []const u8, value: u64 };
 const SpecVersionStruct = struct { name: []const u8, value: i32 };
@@ -616,14 +621,16 @@ fn processSpecVersion(self: *TextData, idx: usize) !void {
     defer self.allo.free(snake_name);
     const snake_name1 = try prefixWithAt(self.allo, snake_name);
     defer self.allo.free(snake_name1);
-    const tname = getType(line, &.{}, &.{}) orelse return;
-    const type_name = if (eql(u8, tname, "c_uint")) "u32" else "i32";
+    const type_name = "i32";
+
     const new_field_name = try allocPrint(
         self.allo,
         "{s}: {s}",
         .{ snake_name1, type_name },
     );
-    const new_field_value = try std.fmt.parseInt(i128, getValue(line, &.{}, &.{}), 10);
+
+    const value = getValue(line, &.{}, &.{});
+    const new_field_value = try parseInt(i32, value, 10);
     try self.spec_versions.append(.{
         .name = new_field_name,
         .value = new_field_value,
@@ -783,12 +790,12 @@ fn processEnum(self: *const TextData, idx: usize) !usize {
     var line = self.getPrevLine(idx);
     const title_name = getName(line, &.{"enum_Vk"}, &.{});
     const is_result = eql(u8, title_name, "Result");
-    const title_type: type = if (eql(u8, getValue(line, &.{}, &.{}), "c_uint")) u32 else i32;
+    const title_type: EnumType = if (eql(u8, getValue(line, &.{}, &.{}), "c_uint")) .u else .i;
 
     const newline = try allocPrint(
         self.allo,
         "pub const {s} = enum({s}) {{",
-        .{ title_name, @typeName(title_type) },
+        .{ title_name, @tagName(title_type) },
     );
     defer self.allo.free(newline);
     try self.write(newline);
@@ -803,21 +810,14 @@ fn processEnum(self: *const TextData, idx: usize) !usize {
 
     var dup_fields = std.ArrayList(DupFieldStruct).init(self.allo);
     defer dup_fields.deinit();
-    defer {
-        for (dup_fields.items) |field| {
-            self.allo.free(field.old);
-            self.allo.free(field.new);
-        }
-    }
+    defer for (dup_fields.items) |field| self.allo.free(field.old);
+    defer for (dup_fields.items) |field| self.allo.free(field.new);
 
     var unique_names = std.StringHashMap(void).init(self.allo);
     defer unique_names.deinit();
 
-    var unique_values1 = std.AutoHashMap(u32, usize).init(self.allo);
-    defer unique_values1.deinit();
-
-    var unique_values2 = std.AutoHashMap(i32, usize).init(self.allo);
-    defer unique_values2.deinit();
+    var unique_values = std.AutoHashMap(WhichValue, usize).init(self.allo);
+    defer unique_values.deinit();
 
     var curr = self.getPrevStart(idx);
     while (curr > 0) {
@@ -850,39 +850,44 @@ fn processEnum(self: *const TextData, idx: usize) !usize {
         defer self.allo.free(temp_field_name);
 
         const new_field_name = try prefixWithAt(self.allo, temp_field_name);
-        const new_field_value = try std.fmt.parseInt(i128, getValue(line, &.{}, &.{}), 10);
+
+        const value = getValue(line, &.{}, &.{});
+        const new_field_value: WhichValue = switch (title_type) {
+            .u => .{ .u = try parseInt(u32, value, 10) },
+            .i => .{ .i = try parseInt(i32, value, 10) },
+        };
 
         if (unique_names.get(new_field_name)) |_| {
             self.allo.free(new_field_name);
             continue;
         }
 
-        if (unique_values1.get(new_field_value)) |fil| {
+        if (unique_values.get(new_field_value)) |fil| {
             const old_field_name = fields.items[fil].name;
             if (old_field_name.len > new_field_name.len) {
                 try dup_fields.append(.{
-                    .old_name = try self.allo.dupe(u8, new_field_name),
-                    .new_name = old_field_name,
+                    .old = try self.allo.dupe(u8, new_field_name),
+                    .new = old_field_name,
                 });
                 fields.items[fil].name = new_field_name;
             } else {
                 try dup_fields.append(.{
-                    .old_name = try self.allo.dupe(u8, old_field_name),
-                    .new_name = new_field_name,
+                    .old = try self.allo.dupe(u8, old_field_name),
+                    .new = new_field_name,
                 });
             }
             continue;
         }
 
         try unique_names.put(new_field_name, {});
-        try unique_values.put(new_field_value, fields.items.len);
+        try unique_values.put(new_field_value, @truncate(fields.items.len));
         try fields.append(.{
             .name = new_field_name,
             .value = new_field_value,
         });
     }
 
-    try sort(&fields);
+    try sort(.{ .a = &fields });
 
     for (fields.items) |field| {
         const field_line = try allocPrint(
@@ -928,33 +933,23 @@ fn processFlag1(self: *const TextData, idx: usize) !usize {
     defer self.allo.free(title_line);
     try self.write(title_line);
 
-    // const name = getName(line, &.{"Vk"}, &.{});
     var title_words = try cc.split2Words(self.allo, title_name);
     defer title_words.deinit();
     defer for (title_words.items) |title_word| self.allo.free(title_word);
 
-    var fields = std.ArrayList().init(self.allo);
+    var fields = std.ArrayList(FlagBitsStruct).init(self.allo);
     defer fields.deinit();
-    defer {
-        for (fields.items) |field| {
-            self.allo.free(field.old_name);
-            self.allo.free(field.new_name);
-        }
-    }
+    defer for (fields.items) |field| self.allo.free(field.name);
 
     var dup_fields = std.ArrayList(DupFieldStruct).init(self.allo);
     defer dup_fields.deinit();
-    defer {
-        for (dup_fields.items) |field| {
-            self.allo.free(field.old);
-            self.allo.free(field.new);
-        }
-    }
+    defer for (dup_fields.items) |field| self.allo.free(field.old);
+    defer for (dup_fields.items) |field| self.allo.free(field.new);
 
     var unique_names = std.StringHashMap(void).init(self.allo);
     defer unique_names.deinit();
 
-    var unique_values = std.StringHashMap(usize).init(self.allo);
+    var unique_values = std.AutoHashMap(u32, u32).init(self.allo);
     defer unique_values.deinit();
 
     line = prev_line;
@@ -991,12 +986,11 @@ fn processFlag1(self: *const TextData, idx: usize) !usize {
 
         const new_field_value = blk: {
             const value = getValue(line, &.{}, &.{});
-            break :blk try self.allo.dupe(u8, value);
+            break :blk try parseInt(u32, value, 10);
         };
 
         if (unique_names.get(new_field_name)) |_| {
             self.allo.free(new_field_name);
-            self.allo.free(new_field_value);
             continue;
         }
 
@@ -1019,14 +1013,14 @@ fn processFlag1(self: *const TextData, idx: usize) !usize {
         }
 
         try unique_names.put(new_field_name, {});
-        try unique_values.put(new_field_value, fields.items.len);
+        try unique_values.put(new_field_value, @truncate(fields.items.len));
         try fields.append(.{
             .name = new_field_name,
             .value = new_field_value,
         });
     }
 
-    try sort(&fields);
+    try sort(.{ .b = &fields });
 
     for (fields.items) |field| {
         const newline = try allocPrint(
@@ -1135,7 +1129,7 @@ fn processFlag2(self: *const TextData, idx: usize) !usize {
         defer self.allo.free(temp_field_name);
 
         const new_field_name = try prefixWithAt(self.allo, temp_field_name);
-        const new_field_value = try std.fmt.parseInt(i128, getValue(line, &.{}, &.{}), 10);
+        const new_field_value = try parseInt(i128, getValue(line, &.{}, &.{}), 10);
 
         if (unique_names.get(new_field_name)) |_| {
             self.allo.free(new_field_name);
@@ -1167,7 +1161,7 @@ fn processFlag2(self: *const TextData, idx: usize) !usize {
         });
     }
 
-    try sort(&fields);
+    try sort(.{ .c = &fields });
 
     for (fields.items) |field| {
         const newline = try allocPrint(
@@ -1551,36 +1545,75 @@ fn prefixWithAt(allo: Allocator, data: []const u8) ![]const u8 {
 }
 
 const SortableStruct = union(enum) {
-    a: std.ArrayList(EnumStruct),
-    b: std.ArrayList(FlagBitsStruct),
-    c: std.ArrayList(FlagBits2Struct),
-    d: std.ArrayList(SpecVersionStruct),
+    a: *std.ArrayList(EnumStruct),
+    b: *std.ArrayList(FlagBitsStruct),
+    c: *std.ArrayList(FlagBits2Struct),
+    d: *std.ArrayList(SpecVersionStruct),
 };
 
-fn sort(SS: *SortableStruct) !void {
-    const fields = switch (SS) {
-        else => |field| field,
-    };
-    const len = fields.items.len;
-    for (0..len -% 1) |i| {
-        for (i +% 1..len) |j| {
-            if (fields.items[i].value > fields.items[j].value) {
-                const tmp = fields.items[i];
-                fields.items[i] = fields.items[j];
-                fields.items[j] = tmp;
+fn sort(SS: SortableStruct) !void {
+    switch (SS) {
+        .a => |fields| {
+            print("{any}\n", .{@TypeOf(fields)});
+            const len = fields.items.len;
+            for (0..len -% 1) |i| {
+                for (i +% 1..len) |j| {
+                    switch (fields.items[i].value) {
+                        .i => |v1| {
+                            const v2 = fields.items[j].value.i;
+                            if (v1 > v2) {
+                                const tmp = fields.items[i];
+                                fields.items[i] = fields.items[j];
+                                fields.items[j] = tmp;
+                            }
+                        },
+                        .u => |v1| {
+                            const v2 = fields.items[j].value.u;
+                            if (v1 > v2) {
+                                const tmp = fields.items[i];
+                                fields.items[i] = fields.items[j];
+                                fields.items[j] = tmp;
+                            }
+                        },
+                    }
+                }
             }
-        }
+        },
+        .b => |fields| {
+            const len = fields.items.len;
+            for (0..len -% 1) |i| {
+                for (i +% 1..len) |j| {
+                    if (fields.items[i] < fields.items[j]) {
+                        const tmp = fields.items[i];
+                        fields.items[i] = fields.items[j];
+                        fields.items[j] = tmp;
+                    }
+                }
+            }
+        },
+        .c => |fields| {
+            const len = fields.items.len;
+            for (0..len -% 1) |i| {
+                for (i +% 1..len) |j| {
+                    if (fields.items[i] < fields.items[j]) {
+                        const tmp = fields.items[i];
+                        fields.items[i] = fields.items[j];
+                        fields.items[j] = tmp;
+                    }
+                }
+            }
+        },
+        .d => |fields| {
+            const len = fields.items.len;
+            for (0..len -% 1) |i| {
+                for (i +% 1..len) |j| {
+                    if (fields.items[i] < fields.items[j]) {
+                        const tmp = fields.items[i];
+                        fields.items[i] = fields.items[j];
+                        fields.items[j] = tmp;
+                    }
+                }
+            }
+        },
     }
-}
-
-fn swap(SS: *SortableStruct, i: usize, j: usize) void {
-    if (i == j) unreachable;
-    const fields = switch (SS) {
-        else => |field| field,
-    };
-    if (fields.items.len == 0) unreachable;
-    if (i > fields.items.len or j > fields.items.len) unreachable;
-    const tmp = fields.items[i];
-    fields.items[i] = fields.items[j];
-    fields.items[j] = tmp;
 }
