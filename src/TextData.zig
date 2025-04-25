@@ -1122,7 +1122,7 @@ fn processFlag2(self: *TextData, idx: usize) !usize {
     const title_name = getName(line, &.{"Vk"}, &.{ "Flags2KHR", "Flags2" });
     const title_line = try allocPrint(
         self.allo,
-        "pub const {s}Flags2 = enum({s}) {{",
+        "pub const {s}FlagBits2 = enum({s}) {{",
         .{ title_name, title_type },
     );
     defer self.allo.free(title_line);

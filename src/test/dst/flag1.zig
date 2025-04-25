@@ -38,4 +38,4 @@ pub const AccessFlagBits = enum(u32) {
     pub const acceleration_structure_read_bit_khr = Self.acceleration_structure_read_bit_nv;
     pub const none_khr = Self.none;
 };
-pub const AccessFlags = PES(AccessFlagBits)
+pub const AccessFlags = PES(AccessFlagBits);

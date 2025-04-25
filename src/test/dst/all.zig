@@ -217,8 +217,8 @@ pub const AccessFlagBits = enum(u32) {
     pub const acceleration_structure_read_bit_khr = Self.acceleration_structure_read_bit_nv;
     pub const none_khr = Self.none;
 };
-pub const AccessFlags = PES(AccessFlagBits)
-pub const AccessFlags2 = enum(u64) {
+pub const AccessFlags = PES(AccessFlagBits);
+pub const AccessFlagBits2 = enum(u64) {
     @"2_none" = 0,
     @"2_indirect_command_read_bit" = 1,
     @"2_index_read_bit" = 2,
@@ -290,7 +290,7 @@ pub const AccessFlags2 = enum(u64) {
     pub const @"2_acceleration_structure_read_bit_khr" = Self.@"2_acceleration_structure_read_bit_nv";
     pub const @"2_acceleration_structure_write_bit_khr" = Self.@"2_acceleration_structure_write_bit_nv";
 };
-pub const AccessFlags2 = PES(AccessFlagBits2)
+pub const AccessFlags2 = PES(AccessFlagBits2);
 pub fn _MarkAllocaS(arg__Ptr: ?*anyopaque, arg__Marker: c_uint) callconv(.c) ?*anyopaque {
     var _Ptr = arg__Ptr;
     _ = &_Ptr;
