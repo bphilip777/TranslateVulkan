@@ -1,4 +1,4 @@
-pub const PES = @import("PackedEnumSet");
+pub const PES = @import("PackedEnumSet").PackedEnumSet;
 pub const ClearColorValue = extern union {
     float32: [4]f32,
     int32: [4]i32,

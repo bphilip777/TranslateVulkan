@@ -83,7 +83,7 @@ pub fn init(
         .compile_errors = std.ArrayList([]const u8).init(allo),
         .dup_flag_names = std.StringHashMap(void).init(allo),
     };
-    try td.write("pub const PES = @import(\"PackedEnumSet\");");
+    try td.write("pub const PES = @import(\"PackedEnumSet\").PackedEnumSet;");
     return td;
 }
 
@@ -972,9 +972,12 @@ fn processFlag1(self: *TextData, idx: usize) !usize {
     const title_type = "u32";
 
     line = self.getNextLine(idx);
+
+    const name = getName(line, &.{"Vk"}, &.{});
+    try self.dup_flag_names.put(try self.allo.dupe(u8, name), {});
+
     var start = self.getNextStart(idx);
     const title_name = getName(line, &.{"Vk"}, &.{ "FlagBitsKHR", "FlagBits" });
-    try self.dup_flag_names.put(try self.allo.dupe(u8, title_name), {});
     const title_line = try allocPrint(
         self.allo,
         "pub const {s}FlagBits = enum({s}) {{",
@@ -1112,10 +1115,11 @@ fn processFlag1(self: *TextData, idx: usize) !usize {
 fn processFlag2(self: *TextData, idx: usize) !usize {
     var line = self.getPrevLine(idx);
 
-    const title_type = "u64";
+    const name = getName(line, &.{"Vk"}, &.{});
+    try self.dup_flag_names.put(try self.allo.dupe(u8, name), {});
 
+    const title_type = "u64";
     const title_name = getName(line, &.{"Vk"}, &.{ "Flags2KHR", "Flags2" });
-    try self.dup_flag_names.put(try self.allo.dupe(u8, title_name), {});
     const title_line = try allocPrint(
         self.allo,
         "pub const {s}Flags2 = enum({s}) {{",

@@ -1,1 +1,1 @@
-pub const PES = @import("PackedEnumSet");
+pub const PES = @import("PackedEnumSet").PackedEnumSet;

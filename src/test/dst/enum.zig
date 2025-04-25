@@ -1,4 +1,4 @@
-pub const PES = @import("PackedEnumSet");
+pub const PES = @import("PackedEnumSet").PackedEnumSet;
 pub const PointClippingBehavior = enum(u32) {
     all_clip_planes = 0,
     user_clip_planes_only = 1,

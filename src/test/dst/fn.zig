@@ -1,4 +1,4 @@
-pub const PES = @import("PackedEnumSet");
+pub const PES = @import("PackedEnumSet").PackedEnumSet;
 pub fn _MarkAllocaS(arg__Ptr: ?*anyopaque, arg__Marker: c_uint) callconv(.c) ?*anyopaque {
     var _Ptr = arg__Ptr;
     _ = &_Ptr;

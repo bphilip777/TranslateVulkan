@@ -1,4 +1,4 @@
-pub const PES = @import("PackedEnumSet");
+pub const PES = @import("PackedEnumSet").PackedEnumSet;
 pub const AccessFlagBits = enum(u32) {
     none = 0,
     indirect_command_read_bit = 1,
@@ -38,3 +38,4 @@ pub const AccessFlagBits = enum(u32) {
     pub const acceleration_structure_read_bit_khr = Self.acceleration_structure_read_bit_nv;
     pub const none_khr = Self.none;
 };
+pub const AccessFlags = PES(AccessFlagBits)
