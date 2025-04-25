@@ -1103,7 +1103,7 @@ fn processFlag1(self: *TextData, idx: usize) !usize {
 
     const newline = try allocPrint(
         self.allo,
-        "pub const {s}Flags = PES({s}FlagBits)",
+        "pub const {s}Flags = PES({s}FlagBits);",
         .{ title_name, title_name },
     );
     defer self.allo.free(newline);
@@ -1250,7 +1250,7 @@ fn processFlag2(self: *TextData, idx: usize) !usize {
 
     const newline = try allocPrint(
         self.allo,
-        "pub const {s}Flags2 = PES({s}FlagBits2)",
+        "pub const {s}Flags2 = PES({s}FlagBits2);",
         .{ title_name, title_name },
     );
     defer self.allo.free(newline);
