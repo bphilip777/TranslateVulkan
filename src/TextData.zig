@@ -138,11 +138,7 @@ pub fn parse(self: *TextData) !void {
     while (start < len) {
         const line = self.getNextLine(start);
         start = self.getNextStart(start);
-        const linetype = (try self.determineLineType(line)) orelse {
-            print("Skipped Line: {s}\n", .{line});
-            continue;
-        };
-        print("Line Type: {s}\n", .{@tagName(linetype)});
+        const linetype = (try self.determineLineType(line)) orelse continue;
 
         switch (linetype) {
             .inline_fn_vk => start = (try self.processInlineFnVk(start)),
@@ -232,28 +228,18 @@ fn determineLineType(self: *TextData, line: []const u8) !?LineType {
     } else if (startsWith(u8, line, strs[1])) {
         line1 = line[strs[1].len +% 1 .. line.len];
         if (isExternUnion(line1)) return .extern_union;
-        print("No extern union, Line: {s}\n", .{line1});
         return null;
     } else {
-        print("No pub or extern union, Line: {s}\n", .{line1});
         return null;
     }
 
     if (!startsWith(u8, line1, strs[1])) return null;
     const line2 = line1[strs[1].len +% 1 .. line1.len];
     if (try self.isCompileError(line2)) return null;
-    if (self.hasCompileError(line2)) {
-        print("Has compile error, Line: {s}\n", .{line2});
-        return null;
-    }
-    if (self.isDuplicateFlagName(line2)) {
-        print("Has duplicate flag name, Line: {s}\n", .{line2});
-        return null;
-    }
-    if (isScreamingSnake(line2)) {
-        print("Is screaming snake name, Line: {s}\n", .{line2});
-        return null;
-    }
+    if (self.hasCompileError(line2)) return null;
+    if (self.isDuplicateFlagName(line2)) return null;
+    if (isScreamingSnake(line2)) return null;
+
     if (isExtensionName(line2)) return .extension_name;
     if (isSpecVersion(line2)) return .spec_version;
     if (isTypeName(line2)) return .type_name;
@@ -670,7 +656,10 @@ fn processSpecVersion(self: *TextData, idx: usize) !void {
     );
 
     const value = getValue(line, &.{}, &.{});
-    const new_field_value = try parseInt(i32, value, 10);
+    const new_field_value = parseInt(i32, value, 10) catch |err| {
+        std.log.err("Could not parse to int: {s}", .{value});
+        return err;
+    };
     try self.spec_versions.append(.{
         .name = new_field_name,
         .value = new_field_value,
@@ -894,8 +883,14 @@ fn processEnum(self: *const TextData, idx: usize) !usize {
 
         const value = getValue(line, &.{}, &.{});
         const new_field_value: WhichValue = switch (title_type) {
-            .u32 => .{ .u32 = try parseInt(u32, value, 10) },
-            .i32 => .{ .i32 = try parseInt(i32, value, 10) },
+            .u32 => .{ .u32 = parseInt(u32, value, 10) catch |err| {
+                std.log.err("Could not parse to u32: {s}", .{value});
+                return err;
+            } },
+            .i32 => .{ .i32 = parseInt(i32, value, 10) catch |err| {
+                std.log.err("Could not parse to i32: {s}", .{value});
+                return err;
+            } },
         };
 
         if (unique_names.get(new_field_name)) |_| {
@@ -1031,7 +1026,10 @@ fn processFlag1(self: *TextData, idx: usize) !usize {
 
         const new_field_value: u32 = blk: {
             const value = getValue(line, &.{}, &.{});
-            break :blk try parseInt(u32, value, 10);
+            break :blk parseInt(u32, value, 10) catch |err| {
+                std.log.err("Could not parse to u32: {s}", .{value});
+                return err;
+            };
         };
 
         if (unique_names.get(new_field_name)) |_| {
@@ -1181,7 +1179,10 @@ fn processFlag2(self: *TextData, idx: usize) !usize {
         defer self.allo.free(temp_field_name);
 
         const new_field_name = try prefixWithAt(self.allo, temp_field_name);
-        const new_field_value = try parseInt(u64, getValue(line, &.{}, &.{}), 10);
+        const new_field_value = parseInt(u64, getValue(line, &.{}, &.{}), 10) catch |err| {
+            std.log.err("Could not parse to u64: {s}", .{line});
+            return err;
+        };
 
         if (unique_names.get(new_field_name)) |_| {
             self.allo.free(new_field_name);
