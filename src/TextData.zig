@@ -49,7 +49,7 @@ wfile: std.fs.File,
 
 type_names: std.ArrayList(TypeNameStruct),
 extension_names: std.ArrayList(ExtensionNameStruct),
-// dup_extension_names: std.ArrayList(DupFieldStruct),
+dup_extension_names: std.ArrayList(DupFieldStruct),
 spec_versions: std.ArrayList(SpecVersionStruct),
 compile_errors: std.ArrayList([]const u8),
 dup_flag_names: std.StringHashMap(void),
@@ -78,7 +78,7 @@ pub fn init(
 
         .type_names = std.ArrayList(TypeNameStruct).init(allo),
         .extension_names = std.ArrayList(ExtensionNameStruct).init(allo),
-        // .dup_extension_names = std.ArrayList(DupFieldStruct).init(allo),
+        .dup_extension_names = std.ArrayList(DupFieldStruct).init(allo),
         .spec_versions = std.ArrayList(SpecVersionStruct).init(allo),
         .compile_errors = std.ArrayList([]const u8).init(allo),
         .dup_flag_names = std.StringHashMap(void).init(allo),
@@ -107,13 +107,13 @@ pub fn deinit(self: *TextData) void {
     }
     self.extension_names.deinit();
 
-    // if (self.dup_extension_names.items.len > 0) {
-    //     for (self.dup_extension_names.items) |den| {
-    //         self.allo.free(den.old);
-    //         self.allo.free(den.new);
-    //     }
-    // }
-    // self.dup_extension_names.deinit();
+    if (self.dup_extension_names.items.len > 0) {
+        for (self.dup_extension_names.items) |den| {
+            self.allo.free(den.old);
+            self.allo.free(den.new);
+        }
+    }
+    self.dup_extension_names.deinit();
 
     if (self.spec_versions.items.len > 0) {
         for (self.spec_versions.items) |sv| self.allo.free(sv.name);
@@ -616,15 +616,22 @@ fn processExtensionName(self: *TextData, idx: usize) !void {
         const name = getName(line, &.{ "VK_KHR_", "VK_" }, &.{"_EXTENSION_NAME"});
         const field_name = try cc.convert(self.allo, name, .snake);
         defer self.allo.free(field_name);
-        break :blk try prefixWithAt(self.allo, field_name);
+        const prefix_with_at = try prefixWithAt(self.allo, field_name);
+        break :blk prefix_with_at;
     };
 
     const new_field_value = blk: {
         const value = getValue(line, &.{ "VK_KHR_", "VK_" }, &.{"_EXTENSION_NAME"});
         if (value[0] != '\"') {
+            print("Found Extension Not Starting w/ \": {s}\n", .{value});
             const field_value = try cc.convert(self.allo, value, .snake);
             defer self.allo.free(field_value);
-            break :blk try prefixWithAt(self.allo, field_value);
+            const prefix_with_at = try prefixWithAt(self.allo, field_value);
+            try self.dup_extension_names.append(.{
+                .old = prefix_with_at,
+                .new = new_field_name,
+            });
+            return;
         }
         break :blk try self.allo.dupe(u8, value);
     };
@@ -647,18 +654,18 @@ fn writeExtensionNames(self: *const TextData) !void {
         try self.write(newline);
     }
 
-    // if (self.dup_extension_names.items.len > 0) {
-    //     try self.write("    const Self = @This();");
-    //     for (self.dup_extension_names.items) |den| {
-    //         const newline = try allocPrint(
-    //             self.allo,
-    //             "     pub const {s} = Self.{s};",
-    //             .{ den.new, den.old },
-    //         );
-    //         defer self.allo.free(newline);
-    //         try self.write(newline);
-    //     }
-    // }
+    if (self.dup_extension_names.items.len > 0) {
+        try self.write("    const Self = @This();");
+        for (self.dup_extension_names.items) |den| {
+            const newline = try allocPrint(
+                self.allo,
+                "    pub const {s} = Self.{s};",
+                .{ den.new, den.old },
+            );
+            defer self.allo.free(newline);
+            try self.write(newline);
+        }
+    }
 
     try self.write("};");
 }
