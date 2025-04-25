@@ -40,6 +40,7 @@ const FlagBitsStruct = struct { name: []const u8, value: u32 };
 const FlagBits2Struct = struct { name: []const u8, value: u64 };
 const SpecVersionStruct = struct { name: []const u8, value: i32 };
 const DupFieldStruct = struct { old: []const u8, new: []const u8 };
+
 const TextData = @This();
 
 allo: std.mem.Allocator,
@@ -48,9 +49,10 @@ wfile: std.fs.File,
 
 type_names: std.ArrayList(TypeNameStruct),
 extension_names: std.ArrayList(ExtensionNameStruct),
-duplicate_extension_names: std.ArrayList(DupFieldStruct),
+// dup_extension_names: std.ArrayList(DupFieldStruct),
 spec_versions: std.ArrayList(SpecVersionStruct),
 compile_errors: std.ArrayList([]const u8),
+dup_flag_names: std.StringHashMap(void),
 
 pub fn init(
     allo: std.mem.Allocator,
@@ -69,17 +71,20 @@ pub fn init(
     _ = try rfile.readAll(data);
     const wfile = try std.fs.cwd().createFile(wfilename, .{});
 
-    return TextData{
+    const td = TextData{
         .allo = allo,
         .wfile = wfile,
         .data = data,
 
         .type_names = std.ArrayList(TypeNameStruct).init(allo),
         .extension_names = std.ArrayList(ExtensionNameStruct).init(allo),
-        .duplicate_extension_names = std.ArrayList(DupFieldStruct).init(allo),
+        // .dup_extension_names = std.ArrayList(DupFieldStruct).init(allo),
         .spec_versions = std.ArrayList(SpecVersionStruct).init(allo),
         .compile_errors = std.ArrayList([]const u8).init(allo),
+        .dup_flag_names = std.StringHashMap(void).init(allo),
     };
+    try td.write("pub const PES = @import(\"PackedEnumSet\");");
+    return td;
 }
 
 pub fn deinit(self: *TextData) void {
@@ -102,13 +107,13 @@ pub fn deinit(self: *TextData) void {
     }
     self.extension_names.deinit();
 
-    if (self.duplicate_extension_names.items.len > 0) {
-        for (self.duplicate_extension_names.items) |den| {
-            self.allo.free(den.old);
-            self.allo.free(den.new);
-        }
-    }
-    self.duplicate_extension_names.deinit();
+    // if (self.dup_extension_names.items.len > 0) {
+    //     for (self.dup_extension_names.items) |den| {
+    //         self.allo.free(den.old);
+    //         self.allo.free(den.new);
+    //     }
+    // }
+    // self.dup_extension_names.deinit();
 
     if (self.spec_versions.items.len > 0) {
         for (self.spec_versions.items) |sv| self.allo.free(sv.name);
@@ -119,6 +124,12 @@ pub fn deinit(self: *TextData) void {
         for (self.compile_errors.items) |ce| self.allo.free(ce);
     }
     self.compile_errors.deinit();
+
+    if (self.dup_flag_names.count() > 0) {
+        var kit = self.dup_flag_names.keyIterator();
+        while (kit.next()) |key| self.allo.free(key.*);
+    }
+    self.dup_flag_names.deinit();
 }
 
 pub fn parse(self: *TextData) !void {
@@ -229,6 +240,7 @@ fn determineLineType(self: *TextData, line: []const u8) !?LineType {
         print("Line: {s}\n", .{line2});
         return null;
     }
+    if (self.isDuplicateFlagName(line2)) return null;
     if (isScreamingSnake(line2)) return null;
     if (isExtensionName(line2)) return .extension_name;
     if (isSpecVersion(line2)) return .spec_version;
@@ -284,6 +296,11 @@ fn isExternConst(line: []const u8) bool {
 
 fn isExportVar(line: []const u8) bool {
     return startsWith(u8, line, "export var");
+}
+
+fn isDuplicateFlagName(self: *const TextData, line: []const u8) bool {
+    const name = getName(line, &.{"Vk"}, &.{});
+    return self.dup_flag_names.get(name) != null;
 }
 
 fn isScreamingSnake(line: []const u8) bool {
@@ -584,11 +601,6 @@ fn processExtensionName(self: *TextData, idx: usize) !void {
         .field = new_field_name,
         .ext = new_field_value,
     });
-
-    // try self.duplicate_extension_names.append(.{
-    //     .field = new_field_name,
-    //     .ext = new_field_value,
-    // });
 }
 
 fn writeExtensionNames(self: *const TextData) !void {
@@ -603,18 +615,18 @@ fn writeExtensionNames(self: *const TextData) !void {
         try self.write(newline);
     }
 
-    if (self.duplicate_extension_names.items.len > 0) {
-        try self.write("    const Self = @This();");
-        for (self.duplicate_extension_names.items) |den| {
-            const newline = try allocPrint(
-                self.allo,
-                "     pub const {s} = Self.{s};",
-                .{ den.new, den.old },
-            );
-            defer self.allo.free(newline);
-            try self.write(newline);
-        }
-    }
+    // if (self.dup_extension_names.items.len > 0) {
+    //     try self.write("    const Self = @This();");
+    //     for (self.dup_extension_names.items) |den| {
+    //         const newline = try allocPrint(
+    //             self.allo,
+    //             "     pub const {s} = Self.{s};",
+    //             .{ den.new, den.old },
+    //         );
+    //         defer self.allo.free(newline);
+    //         try self.write(newline);
+    //     }
+    // }
 
     try self.write("};");
 }
@@ -830,7 +842,11 @@ fn processEnum(self: *const TextData, idx: usize) !usize {
         line = self.getPrevLine(curr);
         curr = self.getPrevStart(curr);
 
-        const ssn = getScreamingSnakeName(line, &.{"VK_"}, &.{}) orelse break;
+        const ssn = getScreamingSnakeName(line, &.{"VK_"}, &.{":"}) orelse break;
+        // const ssn = getScreamingSnakeName(line, &.{"VK_"}, &.{":"}) orelse {
+        //     print("Broke on {s}: SSN\n", .{line});
+        //     break;
+        // };
         const new_name = try cc.convert(self.allo, ssn, .snake);
         defer self.allo.free(new_name);
 
@@ -841,6 +857,10 @@ fn processEnum(self: *const TextData, idx: usize) !usize {
         const matches = try getMatches(self.allo, &name_words, &title_words);
         defer self.allo.free(matches);
         if (!anyMatches(matches) and !is_result) break;
+        // if (!anyMatches(matches) and !is_result) {
+        //     print("Broke on {s}: Matches: {any}, Is Result: {}\n", .{ line, matches, is_result });
+        //     break;
+        // }
 
         for (0..matches.len) |i| {
             const j = matches.len -% i -% 1;
@@ -923,17 +943,18 @@ fn processEnum(self: *const TextData, idx: usize) !usize {
     return start;
 }
 
-fn processFlag1(self: *const TextData, idx: usize) !usize {
+fn processFlag1(self: *TextData, idx: usize) !usize {
     const prev_line = self.getPrevLine(idx);
     var line = prev_line;
     const title_type = "u32";
 
     line = self.getNextLine(idx);
     var start = self.getNextStart(idx);
-    const title_name = getName(line, &.{"Vk"}, &.{});
+    const title_name = getName(line, &.{"Vk"}, &.{ "FlagBitsKHR", "FlagBits" });
+    try self.dup_flag_names.put(try self.allo.dupe(u8, title_name), {});
     const title_line = try allocPrint(
         self.allo,
-        "pub const {s} = enum({s}) {{",
+        "pub const {s}FlagBits = enum({s}) {{",
         .{ title_name, title_type },
     );
     defer self.allo.free(title_line);
@@ -1050,17 +1071,19 @@ fn processFlag1(self: *const TextData, idx: usize) !usize {
     }
     try self.write("};");
 
-    line = self.getNextLine(start);
-    start = self.getNextStart(start);
+    line = self.getNextLine(start); // errors on VkShaderStageFlags
+    const new_line_name = getName(line, &.{"Vk"}, &.{ "FlagsKHR", "Flags" });
+    if (eql(u8, title_name, new_line_name)) start = self.getNextStart(start);
     return start;
 }
 
-fn processFlag2(self: *const TextData, idx: usize) !usize {
+fn processFlag2(self: *TextData, idx: usize) !usize {
     var line = self.getPrevLine(idx);
 
     const title_type = "u64";
 
     const title_name = getName(line, &.{"Vk"}, &.{});
+    try self.dup_flag_names.put(try self.allo.dupe(u8, title_name), {});
     const title_line = try allocPrint(
         self.allo,
         "pub const {s} = enum({s}) {{",

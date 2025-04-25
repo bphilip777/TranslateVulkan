@@ -1,3 +1,4 @@
+pub const PES = @import("PackedEnumSet");
 pub const PointClippingBehavior = enum(u32) {
     all_clip_planes = 0,
     user_clip_planes_only = 1,
@@ -48,6 +49,12 @@ pub const Result = enum(i32) {
     error_initialization_failed = -3,
     error_out_of_device_memory = -2,
     error_out_of_host_memory = -1,
+    success = 0,
+    not_ready = 1,
+    timeout = 2,
+    event_set = 3,
+    event_reset = 4,
+    incomplete = 5,
     suboptimal_khr = 1000001003,
     thread_idle_khr = 1000268000,
     thread_done_khr = 1000268001,

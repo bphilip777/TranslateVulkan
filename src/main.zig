@@ -49,6 +49,7 @@ pub fn main() !void {
         // "extern_struct_vk",
         // "extern_struct",
         // "compile_error",
+        // "has_compile_error",
         "enum",
         // "flag1",
         // "flag2",
