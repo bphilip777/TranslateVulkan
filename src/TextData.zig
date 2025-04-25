@@ -1097,6 +1097,7 @@ fn processFlag1(self: *TextData, idx: usize) !usize {
     line = self.getNextLine(start); // errors on VkShaderStageFlags
     const new_line_name = getName(line, &.{"Vk"}, &.{ "FlagsKHR", "Flags" });
     if (eql(u8, title_name, new_line_name)) start = self.getNextStart(start);
+
     return start;
 }
 
@@ -1233,7 +1234,8 @@ fn processFlag2(self: *TextData, idx: usize) !usize {
     }
     try self.write("};");
 
-    start = self.getPrevStart(start);
+    start = self.getPrevStart(start); // is this correct?
+
     return start;
 }
 

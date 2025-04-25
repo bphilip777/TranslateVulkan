@@ -71,3 +71,7 @@ pub const AccessFlags2 = enum(u64) {
     pub const acceleration_structure_read_bit_khr = Self.acceleration_structure_read_bit_nv;
     pub const acceleration_structure_write_bit_khr = Self.acceleration_structure_write_bit_nv;
 };
+pub const Bool32 = enum(u32) {
+    false = 0,
+    true = 1,
+};
