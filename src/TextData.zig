@@ -789,7 +789,11 @@ fn processExternStructVk(self: *const TextData, idx: usize) !usize {
     var start = idx;
     var line = self.getPrevLine(start);
     const name = getName(line, &.{"struct_Vk"}, &.{});
-    const title = try allocPrint(self.allo, "pub const {s} = extern struct {{", .{name});
+    const title = try allocPrint(
+        self.allo,
+        "pub const {c}{s} = extern struct {{",
+        .{ toLower(name[0]), name[1..name.len] },
+    );
     defer self.allo.free(title);
     try self.write(title);
 
@@ -1264,7 +1268,7 @@ fn processFlag2(self: *TextData, idx: usize) !usize {
     const new_title_name = try allocPrint(self.allo, "{s}Flags2", .{title_name});
     const newline = try allocPrint(
         self.allo,
-        "pub const {s}Flags2 = PES({s}FlagBits2);",
+        "pub const {s} = PES({s}FlagBits2);",
         .{ new_title_name, title_name },
     );
     defer self.allo.free(newline);
