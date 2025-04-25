@@ -236,7 +236,10 @@ fn determineLineType(self: *TextData, line: []const u8) !?LineType {
     if (!startsWith(u8, line1, strs[1])) return null;
     const line2 = line1[strs[1].len +% 1 .. line1.len];
     if (try self.isCompileError(line2)) return null;
-    if (self.hasCompileError(line2)) return null;
+    if (self.hasCompileError(line2)) {
+        print("Has compile error: {s}\n", .{line});
+        return null;
+    }
     if (self.isDuplicateFlagName(line2)) return null;
     if (isScreamingSnake(line2)) return null;
 
@@ -316,8 +319,13 @@ fn isCompileError(self: *TextData, line: []const u8) !bool {
     const name = line[space_idx..open_paren_idx];
     const is_compile_error = eql(u8, name, "@compileError");
     if (is_compile_error) {
-        const new_name = try self.allo.dupe(u8, name);
+        const end = indexOfScalar(u8, line, '=').? -% 1;
+        const space_idx1 = lastIndexOfScalar(u8, line[0..end], ' ');
+        const start = if (space_idx1) |si1| si1 +% 1 else 0;
+        const name1 = line[start..end];
+        const new_name = try self.allo.dupe(u8, name1);
         try self.compile_errors.append(new_name);
+        print("Found compile error: {s}\n", .{new_name});
     }
     return is_compile_error;
 }
