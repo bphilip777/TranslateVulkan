@@ -704,10 +704,6 @@ fn processPFN(self: *const TextData, idx: usize) !void {
     self.allo.free(rline);
     rline = tmp;
 
-    tmp = try replaceFlags(self.allo, rline);
-    self.allo.free(rline);
-    rline = tmp;
-
     try self.write(rline);
 }
 
@@ -794,10 +790,6 @@ fn processExternStructVk(self: *const TextData, idx: usize) !usize {
         rline = try convertFieldName2Snake(self.allo, line);
 
         tmp = try replaceVkStrs(self.allo, rline);
-        self.allo.free(rline);
-        rline = tmp;
-
-        tmp = try replaceFlags(self.allo, rline);
         self.allo.free(rline);
         rline = tmp;
 
@@ -1415,21 +1407,6 @@ fn replaceVkStrs(allo: std.mem.Allocator, data: []const u8) ![]u8 {
     for (vk_strs) |vk_str| {
         if (indexOf(u8, rdata, vk_str) != null) {
             const tmp = try replaceOwned(u8, allo, rdata, vk_str, vk_str[0..1]);
-            allo.free(rdata);
-            rdata = tmp;
-        }
-    }
-    return rdata;
-}
-
-fn replaceFlags(allo: std.mem.Allocator, data: []const u8) ![]u8 {
-    var rdata = try allo.dupe(u8, data);
-    for (
-        [_][]const u8{ "FlagBits2KHR", "FlagBits2", "FlagBitsKHR", "FlagBits" },
-        [_][]const u8{ "Flags2", "Flags2", "Flags", "Flags" },
-    ) |old_suffix, new_suffix| {
-        if (indexOf(u8, rdata, old_suffix) != null) {
-            const tmp = try replaceOwned(u8, allo, rdata, old_suffix, new_suffix);
             allo.free(rdata);
             rdata = tmp;
         }
