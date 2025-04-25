@@ -137,10 +137,12 @@ pub fn parse(self: *TextData) !void {
     const len = self.data.len;
     while (start < len) {
         const line = self.getNextLine(start);
-        // print("Line: {s}\n", .{line});
         start = self.getNextStart(start);
-        const linetype = (try self.determineLineType(line)) orelse continue;
-        // print("Line Type: {s}\n", .{@tagName(linetype)});
+        const linetype = (try self.determineLineType(line)) orelse {
+            print("Skipped Line: {s}\n", .{line});
+            continue;
+        };
+        print("Line Type: {s}\n", .{@tagName(linetype)});
 
         switch (linetype) {
             .inline_fn_vk => start = (try self.processInlineFnVk(start)),
@@ -228,8 +230,10 @@ fn determineLineType(self: *TextData, line: []const u8) !?LineType {
     } else if (startsWith(u8, line, strs[1])) {
         line1 = line[strs[1].len +% 1 .. line.len];
         if (isExternUnion(line1)) return .extern_union;
+        print("No extern union, Line: {s}\n", .{line1});
         return null;
     } else {
+        print("No pub or extern union, Line: {s}\n", .{line1});
         return null;
     }
 
@@ -237,11 +241,17 @@ fn determineLineType(self: *TextData, line: []const u8) !?LineType {
     const line2 = line1[strs[1].len +% 1 .. line1.len];
     if (try self.isCompileError(line2)) return null;
     if (self.hasCompileError(line2)) {
-        print("Line: {s}\n", .{line2});
+        print("Has compile error, Line: {s}\n", .{line2});
         return null;
     }
-    if (self.isDuplicateFlagName(line2)) return null;
-    if (isScreamingSnake(line2)) return null;
+    if (self.isDuplicateFlagName(line2)) {
+        print("Has duplicate flag name, Line: {s}\n", .{line2});
+        return null;
+    }
+    if (isScreamingSnake(line2)) {
+        print("Is screaming snake name, Line: {s}\n", .{line2});
+        return null;
+    }
     if (isExtensionName(line2)) return .extension_name;
     if (isSpecVersion(line2)) return .spec_version;
     if (isTypeName(line2)) return .type_name;
@@ -323,7 +333,10 @@ fn isCompileError(self: *TextData, line: []const u8) !bool {
 fn hasCompileError(self: *const TextData, line: []const u8) bool {
     if (self.compile_errors.items.len == 0) return false;
     for (self.compile_errors.items) |ce| {
-        if (indexOf(u8, line, ce) != null) return true;
+        if (indexOf(u8, line, ce) != null) {
+            print("Found compile error match: {s} - {s}\n", .{ line, ce });
+            return true;
+        }
     } else return false;
 }
 
