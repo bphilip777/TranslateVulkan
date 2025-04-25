@@ -41,8 +41,8 @@
             .hash = "BitTricks-0.0.0-nTotJiZTAAA6ki_lHBZhYAJ1zMo4nV3DFole6YhHX8YW",
         },
         .CodingCase = .{
-            .url = "git+https://github.com/bphilip777/CodingCase.git#596896ff32939cb25201c422d53a162090c9af16",
-            .hash = "CodingCase-0.0.0-0crab_ZFAACyghFNrU5WNR5pAzCNTYxlyAn7K4YIZ1Qw",
+            .url = "git+https://github.com/bphilip777/CodingCase.git#9a0352371988022c4ef4d115fa589df0881921e1",
+            .hash = "CodingCase-0.0.0-0crab1pGAADq5v3vJZAqmrhr2MeScnzP0P6nh7xarASw",
         },
         .PackedEnumSet = .{
             .url = "git+https://github.com/bphilip777/PackedEnumSet.git#691a454ee4abbe6480848f411b13d515b1ce8103",

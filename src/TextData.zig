@@ -961,9 +961,6 @@ fn processFlag1(self: *TextData, idx: usize) !usize {
 
     line = self.getNextLine(idx);
 
-    const name = getName(line, &.{"Vk"}, &.{});
-    try self.dup_flag_names.put(try self.allo.dupe(u8, name), {});
-
     var start = self.getNextStart(idx);
     const title_name = getName(line, &.{"Vk"}, &.{ "FlagBitsKHR", "FlagBits" });
     const title_line = try allocPrint(
@@ -1092,22 +1089,21 @@ fn processFlag1(self: *TextData, idx: usize) !usize {
     const new_line_name = getName(line, &.{"Vk"}, &.{ "FlagsKHR", "Flags" });
     if (eql(u8, title_name, new_line_name)) start = self.getNextStart(start);
 
+    const new_title_name = try allocPrint(self.allo, "{s}Flags", .{title_name});
     const newline = try allocPrint(
         self.allo,
-        "pub const {s}Flags = PES({s}FlagBits);",
-        .{ title_name, title_name },
+        "pub const {s} = PES({s}FlagBits);",
+        .{ new_title_name, title_name },
     );
     defer self.allo.free(newline);
     try self.write(newline);
+    try self.dup_flag_names.put(new_title_name, {});
 
     return start;
 }
 
 fn processFlag2(self: *TextData, idx: usize) !usize {
     var line = self.getPrevLine(idx);
-
-    const name = getName(line, &.{"Vk"}, &.{});
-    try self.dup_flag_names.put(try self.allo.dupe(u8, name), {});
 
     const title_type = "u64";
     const title_name = getName(line, &.{"Vk"}, &.{ "Flags2KHR", "Flags2" });
@@ -1242,13 +1238,15 @@ fn processFlag2(self: *TextData, idx: usize) !usize {
 
     start = self.getPrevStart(start);
 
+    const new_title_name = try allocPrint(self.allo, "{s}Flags2", .{title_name});
     const newline = try allocPrint(
         self.allo,
         "pub const {s}Flags2 = PES({s}FlagBits2);",
-        .{ title_name, title_name },
+        .{ new_title_name, title_name },
     );
     defer self.allo.free(newline);
     try self.write(newline);
+    try self.dup_flag_names.put(new_title_name, {});
 
     return start;
 }
