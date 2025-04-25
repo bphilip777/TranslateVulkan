@@ -236,7 +236,7 @@ fn determineLineType(self: *TextData, line: []const u8) !?LineType {
     if (!startsWith(u8, line1, strs[1])) return null;
     const line2 = line1[strs[1].len +% 1 .. line1.len];
     if (try self.isCompileError(line2)) return null;
-    if (self.hasCompileError(line2)) {
+    if (try self.hasCompileError(line2)) {
         print("Has compile error: {s}\n", .{line});
         return null;
     }
@@ -325,15 +325,30 @@ fn isCompileError(self: *TextData, line: []const u8) !bool {
         const name1 = line[start..end];
         const new_name = try self.allo.dupe(u8, name1);
         try self.compile_errors.append(new_name);
-        print("Found compile error: {s}\n", .{new_name});
+        // print("Found compile error: {s}\n", .{new_name});
     }
     return is_compile_error;
 }
 
-fn hasCompileError(self: *const TextData, line: []const u8) bool {
-    if (self.compile_errors.items.len == 0) return false;
-    for (self.compile_errors.items) |ce| {
+fn hasCompileError(self: *TextData, line: []const u8) !bool {
+    const len = self.compile_errors.items.len;
+    if (len == 0) return false;
+    for (0..len) |i| {
+        const ce = self.compile_errors.items[i];
         if (indexOf(u8, line, ce) != null) {
+            if (startsWith(u8, line, "const")) {
+                const end = indexOfScalar(u8, line, '=').? -% 1;
+                const start = lastIndexOfScalar(u8, line, ' ').? +% 1;
+                const name = line[start..end];
+                const new_name = try self.allo.dupe(u8, name);
+                try self.compile_errors.append(new_name);
+            } else if (indexOf(u8, line, "fn")) |idx| {
+                const start = idx +% 1;
+                const end = indexOfScalar(u8, line, '(').?;
+                const name = line[start..end];
+                const new_name = try self.allo.dupe(u8, name);
+                try self.compile_errors.append(new_name);
+            }
             print("Found compile error match: {s} - {s}\n", .{ line, ce });
             return true;
         }
@@ -1114,7 +1129,7 @@ fn processFlag2(self: *TextData, idx: usize) !usize {
     var line = self.getPrevLine(idx);
 
     const title_type = "u64";
-    const title_name = getName(line, &.{"Vk"}, &.{ "Flags2KHR", "Flags2" });
+    const title_name = getName(line, &.{"Vk"}, &.{ "FlagBits2KHR", "FlagsBits2", "Flags2KHR", "Flags2" });
     const title_line = try allocPrint(
         self.allo,
         "pub const {s}FlagBits2 = enum({s}) {{",
