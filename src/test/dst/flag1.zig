@@ -1,3 +1,4 @@
+pub const PES = @import("PackedEnumSet");
 pub const AccessFlagBits = enum(u32) {
     none = 0,
     indirect_command_read_bit = 1,
@@ -28,7 +29,7 @@ pub const AccessFlagBits = enum(u32) {
     transform_feedback_write_bit_ext = 33554432,
     transform_feedback_counter_read_bit_ext = 67108864,
     transform_feedback_counter_write_bit_ext = 134217728,
-    max_enum = 2147483647,
+    flag_bits_max_enum = 2147483647,
     const Self = @This();
     pub const command_preprocess_write_bit_ext = Self.command_preprocess_write_bit_nv;
     pub const command_preprocess_read_bit_ext = Self.command_preprocess_read_bit_nv;

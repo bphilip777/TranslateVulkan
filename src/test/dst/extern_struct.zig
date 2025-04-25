@@ -1,3 +1,4 @@
+pub const PES = @import("PackedEnumSet");
 pub const struct_IXMLDOMNotationVtbl = extern struct {
     QueryInterface: ?*const fn ([*c]IXMLDOMNotation, [*c]const IID, [*c]?*anyopaque) callconv(.c) HRESULT = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation, [*c]const IID, [*c]?*anyopaque) callconv(.c) HRESULT),
     AddRef: ?*const fn ([*c]IXMLDOMNotation) callconv(.c) ULONG = @import("std").mem.zeroes(?*const fn ([*c]IXMLDOMNotation) callconv(.c) ULONG),

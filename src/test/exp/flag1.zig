@@ -1,4 +1,5 @@
-pub const AccessFlags = enum(u32) {
+pub const PES = @import("PackedEnumSet");
+pub const AccessFlagBits = enum(u32) {
     none = 0,
     indirect_command_read_bit = 1,
     index_read_bit = 2,
@@ -28,5 +29,12 @@ pub const AccessFlags = enum(u32) {
     transform_feedback_write_bit_ext = 33554432,
     transform_feedback_counter_read_bit_ext = 67108864,
     transform_feedback_counter_write_bit_ext = 134217728,
-    max_enum = 2147483647,
+    flag_bits_max_enum = 2147483647,
+    const Self = @This();
+    pub const command_preprocess_write_bit_ext = Self.command_preprocess_write_bit_nv;
+    pub const command_preprocess_read_bit_ext = Self.command_preprocess_read_bit_nv;
+    pub const fragment_shading_rate_attachment_read_bit_khr = Self.shading_rate_image_read_bit_nv;
+    pub const acceleration_structure_write_bit_khr = Self.acceleration_structure_write_bit_nv;
+    pub const acceleration_structure_read_bit_khr = Self.acceleration_structure_read_bit_nv;
+    pub const none_khr = Self.none;
 };

@@ -1,3 +1,4 @@
+pub const PES = @import("PackedEnumSet");
 pub const DWORD = c_ulong;
 pub const PVOID = ?*anyopaque;
 pub const ULONG_PTR = c_ulonglong;

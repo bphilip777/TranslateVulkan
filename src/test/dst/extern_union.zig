@@ -1,3 +1,4 @@
+pub const PES = @import("PackedEnumSet");
 const union_unnamed_344 = extern union {
     hBitmap: HBITMAP,
     hMetaFilePict: HMETAFILEPICT,
