@@ -1,4 +1,4 @@
-pub const AccessFlags = enum(u32) {
+pub const AccessFlagBits = enum(u32) {
     none = 0,
     indirect_command_read_bit = 1,
     index_read_bit = 2,

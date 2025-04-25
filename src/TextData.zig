@@ -903,6 +903,7 @@ fn processEnum(self: *const TextData, idx: usize) !usize {
         defer self.allo.free(field_line);
         try self.write(field_line);
     }
+
     if (dup_fields.items.len > 0) {
         try self.write("    const Self = @This();");
         for (dup_fields.items) |field| {
