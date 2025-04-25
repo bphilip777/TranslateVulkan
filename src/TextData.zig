@@ -656,10 +656,11 @@ fn processSpecVersion(self: *TextData, idx: usize) !void {
     );
 
     const value = getValue(line, &.{}, &.{});
-    const new_field_value = parseInt(i32, value, 10) catch |err| {
-        std.log.err("Could not parse to int: {s}", .{value});
-        return err;
+    const new_field_value = parseInt(i32, value, 10) catch {
+        self.allo.free(new_field_name);
+        return;
     };
+
     try self.spec_versions.append(.{
         .name = new_field_name,
         .value = new_field_value,
@@ -1430,9 +1431,7 @@ fn convertFieldName2Snake(allo: std.mem.Allocator, data: []const u8) ![]u8 {
     const colon_idx = indexOfScalar(u8, data, ':').?;
     const space_idx = lastIndexOfScalar(u8, data[0..colon_idx], ' ').? +% 1;
     const name = data[space_idx..colon_idx];
-    const new_name = cc.convert(allo, name, .snake) catch blk: {
-        break :blk try allo.dupe(u8, name);
-    };
+    const new_name = cc.convert(allo, name, .snake) catch try allo.dupe(u8, name);
     defer allo.free(new_name);
 
     var new_data = try allo.alloc(u8, data.len +% new_name.len -% name.len);
