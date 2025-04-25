@@ -1098,6 +1098,14 @@ fn processFlag1(self: *TextData, idx: usize) !usize {
     const new_line_name = getName(line, &.{"Vk"}, &.{ "FlagsKHR", "Flags" });
     if (eql(u8, title_name, new_line_name)) start = self.getNextStart(start);
 
+    const newline = try allocPrint(
+        self.allo,
+        "pub const {s}Flags = PES({s}FlagBits)",
+        .{ title_name, title_name },
+    );
+    defer self.allo.free(newline);
+    try self.write(newline);
+
     return start;
 }
 
@@ -1106,11 +1114,11 @@ fn processFlag2(self: *TextData, idx: usize) !usize {
 
     const title_type = "u64";
 
-    const title_name = getName(line, &.{"Vk"}, &.{});
+    const title_name = getName(line, &.{"Vk"}, &.{ "Flags2KHR", "Flags2" });
     try self.dup_flag_names.put(try self.allo.dupe(u8, title_name), {});
     const title_line = try allocPrint(
         self.allo,
-        "pub const {s} = enum({s}) {{",
+        "pub const {s}Flags2 = enum({s}) {{",
         .{ title_name, title_type },
     );
     defer self.allo.free(title_line);
@@ -1234,7 +1242,15 @@ fn processFlag2(self: *TextData, idx: usize) !usize {
     }
     try self.write("};");
 
-    start = self.getPrevStart(start); // is this correct?
+    start = self.getPrevStart(start);
+
+    const newline = try allocPrint(
+        self.allo,
+        "pub const {s}Flags2 = PES({s}FlagBits2)",
+        .{ title_name, title_name },
+    );
+    defer self.allo.free(newline);
+    try self.write(newline);
 
     return start;
 }
