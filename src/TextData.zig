@@ -325,9 +325,12 @@ fn isCompileError(self: *TextData, line: []const u8) !bool {
     const open_paren_idx = indexOfScalar(u8, line, '(') orelse return false;
     const space_idx = lastIndexOfScalar(u8, line[0..open_paren_idx], ' ').? +% 1;
     const name = line[space_idx..open_paren_idx];
-    const new_name = try self.allo.dupe(u8, name);
-    try self.compile_errors.append(new_name);
-    return eql(u8, name, "@compileError");
+    const is_compile_error = eql(u8, name, "@compileError");
+    if (is_compile_error) {
+        const new_name = try self.allo.dupe(u8, name);
+        try self.compile_errors.append(new_name);
+    }
+    return is_compile_error;
 }
 
 fn hasCompileError(self: *const TextData, line: []const u8) bool {
