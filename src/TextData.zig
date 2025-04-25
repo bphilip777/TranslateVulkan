@@ -172,6 +172,7 @@ pub fn parse(self: *TextData) !void {
             .type_vk => try self.processTypeVk(start),
             .type => try self.processType(start),
 
+            .base_vk => try self.processBaseVk(start),
             .base => try self.processBase(start),
         }
     }
@@ -209,6 +210,7 @@ const LineType = enum {
     type_vk,
     type,
 
+    base_vk,
     base,
 };
 
@@ -268,6 +270,7 @@ fn determineLineType(self: *TextData, line: []const u8) !?LineType {
     if (isEnum(line2)) return .@"enum";
     if (isTypeVk(line2)) return .type_vk;
     if (isType(line2)) return .type;
+    if (isBaseVk(line2)) return .base_vk;
     return .base;
 }
 
@@ -456,6 +459,10 @@ fn isType(line: []const u8) bool {
     const end = lastIndexOfScalar(u8, line, ';') orelse return false;
     const type_name = line[start..end];
     return types.has(type_name);
+}
+
+fn isBaseVk(line: []const u8) bool {
+    return indexOf(u8, line, "Vk") != null;
 }
 
 fn processInlineFnVk(self: *const TextData, idx: usize) !usize {
@@ -1246,6 +1253,13 @@ fn processTypeVk(self: *const TextData, idx: usize) !void {
 fn processType(self: *const TextData, idx: usize) !void {
     const line = self.getPrevLine(idx);
     try self.write(line);
+}
+
+fn processBaseVk(self: *const TextData, idx: usize) !void {
+    const line = self.getPrevLine(idx);
+    const newline = try replaceVkStrs(self.allo, line);
+    defer self.allo.free(newline);
+    try self.write(newline);
 }
 
 fn processBase(self: *const TextData, idx: usize) !void {

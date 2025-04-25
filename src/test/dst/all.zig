@@ -334,7 +334,7 @@ pub const Flags = u32;
 pub const Flags64 = u64;
 pub const SampleMask = u32;
 pub const DeviceCreateFlags = Flags;
-pub const VkPhysicalDeviceVariablePointerFeatures = VkPhysicalDeviceVariablePointersFeatures;
+pub const PhysicalDeviceVariablePointerFeatures = PhysicalDeviceVariablePointersFeatures;
 pub const TypeNames = struct {
     uuid_size: u32 = 16,
 };
