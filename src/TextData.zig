@@ -349,7 +349,7 @@ fn hasCompileError(self: *TextData, line: []const u8) !bool {
                 const new_name = try self.allo.dupe(u8, name);
                 try self.compile_errors.append(new_name);
             }
-            print("Found compile error match: {s} - {s}\n", .{ line, ce });
+            // print("Found compile error match: {s} - {s}\n", .{ line, ce });
             return true;
         }
     } else return false;
@@ -796,11 +796,7 @@ fn processExternStructVk(self: *const TextData, idx: usize) !usize {
     var start = idx;
     var line = self.getPrevLine(start);
     const name = getName(line, &.{"struct_Vk"}, &.{});
-    const title = try allocPrint(
-        self.allo,
-        "pub const {c}{s} = extern struct {{",
-        .{ toLower(name[0]), name[1..name.len] },
-    );
+    const title = try allocPrint(self.allo, "pub const {s} = extern struct {{", .{name});
     defer self.allo.free(title);
     try self.write(title);
 
