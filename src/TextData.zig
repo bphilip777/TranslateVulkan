@@ -137,8 +137,11 @@ pub fn parse(self: *TextData) !void {
     const len = self.data.len;
     while (start < len) {
         const line = self.getNextLine(start);
+        print("Line: {s}\n", .{line});
+
         start = self.getNextStart(start);
         const linetype = (try self.determineLineType(line)) orelse continue;
+        print("Line Type: {s}\n", .{@tagName(linetype)});
 
         switch (linetype) {
             .inline_fn_vk => start = (try self.processInlineFnVk(start)),
@@ -213,6 +216,9 @@ const LineType = enum {
 fn determineLineType(self: *TextData, line: []const u8) !?LineType {
     const strs = [_][]const u8{ "pub", "const" };
 
+    if (isEmpty(line)) return null;
+    if (isComment(line)) return null;
+
     var line1: []const u8 = undefined;
     if (startsWith(u8, line, strs[0])) {
         line1 = line[strs[0].len +% 1 .. line.len];
@@ -261,6 +267,14 @@ fn determineLineType(self: *TextData, line: []const u8) !?LineType {
     if (isType(line2)) return .type;
     if (isBaseVk(line2)) return .base_vk;
     return .base;
+}
+
+fn isEmpty(line: []const u8) bool {
+    return line.len == 0 or eql(u8, line, "\r\n");
+}
+
+fn isComment(line: []const u8) bool {
+    return startsWith(u8, line, "//");
 }
 
 fn isInlineFnVk(line: []const u8) bool {
