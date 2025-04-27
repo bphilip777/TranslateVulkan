@@ -543,7 +543,13 @@ fn processExternFnVk(self: *const TextData, idx: usize) !void {
     const camel_name = try cc.convert(self.allo, fn_name, .camel);
     defer self.allo.free(camel_name);
 
-    tmp = try replaceOwned(u8, self.allo, line, fn_name, camel_name);
+    const vk_idx = indexOf(u8, line, "vk").?;
+    const open_paren_idx = indexOfScalar(u8, line, '(').?;
+    tmp = try allocPrint(
+        self.allo,
+        "{s}{s}{s}",
+        .{ line[0..vk_idx], camel_name, line[open_paren_idx..] },
+    );
     rline = tmp;
 
     tmp = try replaceVkStrs(self.allo, rline);
@@ -810,6 +816,7 @@ fn processExternStructVk(self: *const TextData, idx: usize) !usize {
     var start = idx;
     var line = self.getPrevLine(start);
     const name = getName(line, &.{"struct_Vk"}, &.{});
+    print("Name: {s}\n", .{name});
     const title = try allocPrint(self.allo, "pub const {s} = extern struct {{", .{name});
     defer self.allo.free(title);
     try self.write(title);
